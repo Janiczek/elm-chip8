@@ -1,5 +1,6 @@
 module Main exposing (main)
 
+import Array exposing (Array)
 import Playground as P
 
 
@@ -9,49 +10,96 @@ main =
 
 
 type alias Model =
-    { pixel : Int }
+    { memory : Array Int
+
+    -- DISPLAY: the 0x800 pixels = 0x100 bytes live inside 0xF00..0xFFF of the memory
+    -- TODO: what about display : Set (Int, Int)
+    }
 
 
 init : Model
 init =
-    { pixel = 0 }
+    { memory =
+        -- Array.repeat memorySize 0
+        Array.initialize memorySize (modBy 256)
+    }
 
 
 view : P.Computer -> Model -> List P.Shape
 view computer model =
-    let
-        x =
-            model.pixel |> modBy screenWidth
-
-        y =
-            (model.pixel // screenWidth) |> modBy screenHeight
-    in
-    [ displayBgShape
-    , pixelShape x y
+    [ [ viewDisplayBg
+      , viewPixel black 1 5
+      ]
+    , viewMemory model.memory
     ]
+        |> List.concat
 
 
 update : P.Computer -> Model -> Model
 update computer model =
-    { model | pixel = model.pixel + 1 }
+    -- TODO
+    model
 
 
-pixelShape : Int -> Int -> P.Shape
-pixelShape x y =
-    P.square black screenScale
+viewPixel : P.Color -> Int -> Int -> P.Shape
+viewPixel color x y =
+    P.square color screenScaleFloat
         |> P.move -(screenWidthScaled / 2) (screenHeightScaled / 2)
-        |> P.move (screenScale / 2) -(screenScale / 2)
-        |> P.move (toFloat x * screenScale) -(toFloat y * screenScale)
+        |> P.move (screenScaleFloat / 2) -(screenScaleFloat / 2)
+        |> P.move (px x) -(px y)
 
 
-displayBgShape : P.Shape
-displayBgShape =
+viewDisplayBg : P.Shape
+viewDisplayBg =
     P.rectangle white screenWidthScaled screenHeightScaled
 
 
-screenScale : Float
+memoryWidth : Int
+memoryWidth =
+    64
+
+
+viewMemory : Array Int -> List P.Shape
+viewMemory memory =
+    memory
+        |> Array.toList
+        |> List.indexedMap
+            (\i byte ->
+                let
+                    x : Int
+                    x =
+                        i |> modBy memoryWidth
+
+                    y : Int
+                    y =
+                        i // memoryWidth
+
+                    b : Float
+                    b =
+                        toFloat byte
+
+                    color : P.Color
+                    color =
+                        P.rgb b b b
+                in
+                viewPixel color x y
+                    |> P.move (px (screenWidth + 8)) (px 32)
+            )
+
+
+px : Int -> Float
+px n =
+    toFloat (n * screenScale)
+
+
+screenScale : Int
 screenScale =
     4
+
+
+screenScaleFloat : Float
+screenScaleFloat =
+    toFloat screenScale
 
 
 screenWidth : Int
@@ -66,12 +114,12 @@ screenHeight =
 
 screenWidthScaled : Float
 screenWidthScaled =
-    toFloat screenWidth * screenScale
+    toFloat (screenWidth * screenScale)
 
 
 screenHeightScaled : Float
 screenHeightScaled =
-    toFloat screenHeight * screenScale
+    toFloat (screenHeight * screenScale)
 
 
 white : P.Color
@@ -82,6 +130,11 @@ white =
 black : P.Color
 black =
     P.rgb 101 123 131
+
+
+memorySize : Int
+memorySize =
+    0x1000
 
 
 
