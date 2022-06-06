@@ -3,7 +3,6 @@ module Memory exposing
     , displayStart
     , get
     , getDisplayActivePixels
-    , getDisplayByte
     , getInstruction
     , init
     , loadProgram
@@ -11,9 +10,11 @@ module Memory exposing
     , size
     , toList
     , view
+    , xorDisplayBit
     )
 
 import Array exposing (Array)
+import Bitwise
 import Error exposing (Error(..))
 import Instruction exposing (Address(..), Byte(..), Instruction)
 import Instruction.Parser
@@ -82,6 +83,14 @@ get ((Address rawAddr) as addr) (Memory memory) =
             Ok (Byte byte)
 
 
+set : Address -> Int -> Memory -> Result Error Memory
+set ((Address rawAddr) as addr) value (Memory memory) =
+    memory
+        |> Array.set rawAddr value
+        |> Memory
+        |> Ok
+
+
 isExecutable : Int -> Bool
 isExecutable addr =
     addr >= programStart && (addr + 1) <= programEnd
@@ -100,14 +109,65 @@ getInstruction ((Address rawAddr) as addr) memory =
         Err (TriedToExecuteNonexecutableMemory addr)
 
 
-getDisplayByte : ( Int, Int ) -> Memory -> Result Error Byte
-getDisplayByte ( x, y ) memory =
+xorDisplayBit : ( Int, Int ) -> Int -> Memory -> Result Error ( Memory, { hadCollision : Bool } )
+xorDisplayBit ( x, y ) xorBit memory =
     let
+        bitPosition : Int
+        bitPosition =
+            x + Util.screenWidth * y
+
+        bytePosition : Int
+        bytePosition =
+            bitPosition // 8
+
+        bitIndexInsideByte : Int
+        bitIndexInsideByte =
+            bitPosition |> modBy 8
+
         addr : Address
         addr =
-            Address (displayStart + x + Util.screenWidth * y)
+            Address (displayStart + bytePosition)
     in
     get addr memory
+        |> Result.andThen
+            (\(Byte byte) ->
+                let
+                    currentBit : Int
+                    currentBit =
+                        bit bitIndexInsideByte byte
+
+                    resultBit : Int
+                    resultBit =
+                        Bitwise.xor currentBit xorBit
+
+                    hadCollision : Bool
+                    hadCollision =
+                        currentBit == 1 && resultBit == 0
+
+                    mask : Int
+                    mask =
+                        Bitwise.shiftLeftBy (7 - bitIndexInsideByte) 1
+
+                    resultByte : Int
+                    resultByte =
+                        -- https://graphics.stanford.edu/~seander/bithacks.html#MaskedMerge
+                        -- Merge bits from two values according to a mask
+                        -- Normal: (a & ~mask) | (b & mask)
+                        -- Optimized: a ^ ((a ^ b) & mask)
+                        Bitwise.or
+                            (Bitwise.and byte (Bitwise.complement mask))
+                            (Bitwise.shiftLeftBy (7 - bitIndexInsideByte) resultBit)
+                in
+                set addr resultByte memory
+                    |> Result.map (\newMemory -> ( newMemory, { hadCollision = hadCollision } ))
+            )
+
+
+bit : Int -> Int -> Int
+bit bitIndex byte =
+    byte
+        |> Bitwise.shiftRightZfBy (7 - bitIndex)
+        |> Bitwise.and 0x01
 
 
 getDisplayActivePixels : Memory -> List ( Int, Int )
@@ -124,17 +184,13 @@ getDisplayActivePixels memory =
 
                     bits : List Int
                     bits =
-                        byte
-                            |> RadixInt.fromInt (RadixInt.Base 2)
-                            |> RadixInt.toList
-                            |> List.reverse
-                            |> zeroPadLeft 8
+                        Util.toBitList byte
                 in
                 bits
                     |> List.indexedMap Tuple.pair
                     |> List.filterMap
-                        (\( i, bit ) ->
-                            if bit == 1 then
+                        (\( i, bit_ ) ->
+                            if bit_ == 1 then
                                 let
                                     position : Int
                                     position =
@@ -149,16 +205,6 @@ getDisplayActivePixels memory =
                                 Nothing
                         )
             )
-
-
-zeroPadLeft : Int -> List Int -> List Int
-zeroPadLeft length list =
-    let
-        toAdd : Int
-        toAdd =
-            max 0 (length - List.length list)
-    in
-    List.repeat toAdd 0 ++ list
 
 
 

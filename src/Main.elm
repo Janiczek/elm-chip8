@@ -5,6 +5,7 @@ import Display
 import Error exposing (Error(..))
 import ExamplePrograms
 import Instruction exposing (Address(..), Byte(..), Instruction(..))
+import List.Cartesian
 import Memory exposing (Memory)
 import Playground as P
 import Random exposing (Generator)
@@ -238,23 +239,56 @@ runInstruction instruction model =
                 (Address i) =
                     model.i
 
-                rows : Result Error (List Byte)
-                rows =
+                spriteRows : Result Error (List Byte)
+                spriteRows =
                     List.range i (i + height - 1)
                         |> Result.combineMap (\addr -> Memory.get (Address addr) model.memory)
+
+                xorBits : List Byte -> Result Error ( Memory, { hadCollision : Bool } )
+                xorBits rows =
+                    rows
+                        |> List.indexedMap Tuple.pair
+                        |> List.concatMap
+                            (\( dy, Byte row ) ->
+                                List.map2
+                                    (\x_ bit ->
+                                        let
+                                            y_ : Int
+                                            y_ =
+                                                y + dy
+                                        in
+                                        ( ( x_, y_ ), bit )
+                                    )
+                                    (List.range x (x + 7))
+                                    (Util.toBitList row)
+                            )
+                        |> List.foldl
+                            (\( ( x_, y_ ), bit ) result ->
+                                result
+                                    |> Result.andThen
+                                        (\( accMemory, { hadCollision } ) ->
+                                            Memory.xorDisplayBit ( x_, y_ ) bit accMemory
+                                                |> Result.map (Tuple.mapSecond (\new -> { hadCollision = hadCollision || new.hadCollision }))
+                                        )
+                            )
+                            (Ok ( model.memory, { hadCollision = False } ))
             in
-            case rows of
+            case spriteRows |> Result.andThen xorBits of
                 Err err ->
                     { model | state = Halted err }
 
-                Ok rows_ ->
+                Ok ( newMemory, { hadCollision } ) ->
                     let
                         newVF : Int
                         newVF =
-                            Debug.todo "new VF"
+                            if hadCollision then
+                                1
+
+                            else
+                                0
                     in
                     { model
-                        | memory = Debug.todo "new memory"
+                        | memory = newMemory
                         , registers = Registers.set VF newVF model.registers
                     }
 

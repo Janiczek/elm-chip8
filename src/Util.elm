@@ -7,6 +7,7 @@ module Util exposing
     , screenHeightScaled
     , screenWidth
     , screenWidthScaled
+    , toBitList
     , viewPixel
     , white
     )
@@ -85,3 +86,22 @@ bytePair ( hi, lo ) =
 hexBytePair : ( Int, Int ) -> String
 hexBytePair ( hi, lo ) =
     hex (bytePair ( hi, lo ))
+
+
+toBitList : Int -> List Int
+toBitList byte =
+    byte
+        |> RadixInt.fromInt (RadixInt.Base 2)
+        |> RadixInt.toList
+        |> List.reverse
+        |> zeroPadLeft 8
+
+
+zeroPadLeft : Int -> List Int -> List Int
+zeroPadLeft length list =
+    let
+        toAdd : Int
+        toAdd =
+            max 0 (length - List.length list)
+    in
+    List.repeat toAdd 0 ++ list
