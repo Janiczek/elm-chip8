@@ -1,6 +1,7 @@
 module Main exposing (main)
 
-import Array exposing (Array)
+import ExamplePrograms
+import Memory exposing (Memory)
 import Playground as P
 
 
@@ -10,7 +11,8 @@ main =
 
 
 type alias Model =
-    { memory : Array Int
+    { memory : Memory
+    , pc : Int
 
     -- DISPLAY: the 0x800 pixels = 0x100 bytes live inside 0xF00..0xFFF of the memory
     -- TODO: what about display : Set (Int, Int)
@@ -20,8 +22,9 @@ type alias Model =
 init : Model
 init =
     { memory =
-        -- Array.repeat memorySize 0
-        Array.initialize memorySize (modBy 256)
+        Memory.init
+            |> Memory.loadProgram ExamplePrograms.maze
+    , pc = Memory.programStart
     }
 
 
@@ -30,7 +33,7 @@ view computer model =
     [ [ viewDisplayBg
       , viewPixel black 1 5
       ]
-    , viewMemory model.memory
+    , viewMemory model.pc model.memory
     ]
         |> List.concat
 
@@ -59,10 +62,10 @@ memoryWidth =
     64
 
 
-viewMemory : Array Int -> List P.Shape
-viewMemory memory =
+viewMemory : Int -> Memory -> List P.Shape
+viewMemory pc memory =
     memory
-        |> Array.toList
+        |> Memory.toList
         |> List.indexedMap
             (\i byte ->
                 let
@@ -80,7 +83,11 @@ viewMemory memory =
 
                     color : P.Color
                     color =
-                        P.rgb b b b
+                        if pc == i then
+                            P.red
+
+                        else
+                            P.rgb b b b
                 in
                 viewPixel color x y
                     |> P.move (px (screenWidth + 8)) (px 32)
@@ -130,11 +137,6 @@ white =
 black : P.Color
 black =
     P.rgb 101 123 131
-
-
-memorySize : Int
-memorySize =
-    0x1000
 
 
 
