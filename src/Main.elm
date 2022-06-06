@@ -8,7 +8,8 @@ import Instruction exposing (Address(..), Byte(..), Instruction(..))
 import Memory exposing (Memory)
 import Playground as P
 import Random exposing (Generator)
-import Registers exposing (Registers)
+import Registers exposing (Register(..), Registers)
+import Result.Extra as Result
 import Util
 
 
@@ -18,16 +19,12 @@ main =
 
 
 type alias Model =
-    -- TODO some error state? don't run endlessly
     { memory : Memory
     , pc : Address
     , i : Address
     , registers : Registers
     , state : State
     , randomSeed : Random.Seed
-
-    -- DISPLAY: the 0x800 pixels = 0x100 bytes live inside 0xF00..0xFFF of the memory
-    -- TODO: what about display : Set (Int, Int)
     }
 
 
@@ -52,7 +49,7 @@ init =
 
 view : P.Computer -> Model -> List P.Shape
 view computer model =
-    [ Display.view
+    [ Display.view model.memory
     , Memory.view model.pc model.memory
 
     -- TODO show the registers
@@ -78,7 +75,8 @@ view computer model =
 update : P.Computer -> Model -> Model
 update computer model =
     model
-        |> stepTimes {- (min computer.time.delta 4) -} 1
+        -- |> stepTimes {- (min computer.time.delta 4) -} 1
+        |> step
 
 
 stepTimes : Int -> Model -> Model
@@ -159,11 +157,7 @@ runInstruction instruction model =
             todo model
 
         DoIfNeq reg (Byte byte) ->
-            let
-                regValue =
-                    Registers.get reg model.registers
-            in
-            if regValue /= byte then
+            if Registers.get reg model.registers /= byte then
                 model
 
             else
@@ -232,7 +226,37 @@ runInstruction instruction model =
             }
 
         DrawSprite { vx, vy, height } ->
-            todo model
+            let
+                x : Int
+                x =
+                    Registers.get vx model.registers
+
+                y : Int
+                y =
+                    Registers.get vy model.registers
+
+                (Address i) =
+                    model.i
+
+                rows : Result Error (List Byte)
+                rows =
+                    List.range i (i + height - 1)
+                        |> Result.combineMap (\addr -> Memory.get (Address addr) model.memory)
+            in
+            case rows of
+                Err err ->
+                    { model | state = Halted err }
+
+                Ok rows_ ->
+                    let
+                        newVF : Int
+                        newVF =
+                            Debug.todo "new VF"
+                    in
+                    { model
+                        | memory = Debug.todo "new memory"
+                        , registers = Registers.set VF newVF model.registers
+                    }
 
         DoIfKeyNotPressed reg ->
             todo model

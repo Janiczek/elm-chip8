@@ -24,10 +24,34 @@ registerLo byte =
     let
         reg : Int
         reg =
-            Bitwise.and 0x0F byte
+            loNibble byte
     in
     Registers.register reg
         |> Result.fromMaybe (ParsedInvalidRegister reg)
+
+
+registerHi : Int -> Result Error Register
+registerHi byte =
+    let
+        reg : Int
+        reg =
+            hiNibble byte
+    in
+    Registers.register reg
+        |> Result.fromMaybe (ParsedInvalidRegister reg)
+
+
+hiNibble : Int -> Int
+hiNibble byte =
+    byte
+        |> Bitwise.and 0xF0
+        |> Bitwise.shiftRightZfBy 4
+
+
+loNibble : Int -> Int
+loNibble byte =
+    byte
+        |> Bitwise.and 0x0F
 
 
 parse : ( Byte, Byte ) -> Result Error Instruction
@@ -35,9 +59,7 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
     let
         hh : Int
         hh =
-            hi
-                |> Bitwise.and 0xF0
-                |> Bitwise.shiftRightZfBy 4
+            hiNibble hi
     in
     if hh == 0x03 then
         registerLo hi
@@ -49,6 +71,18 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
     else if hh == 0x0C then
         registerLo hi
             |> Result.map (\reg -> SetRandomAnd reg lo_)
+
+    else if hh == 0x0D then
+        Result.map2
+            (\x y ->
+                DrawSprite
+                    { vx = x
+                    , vy = y
+                    , height = loNibble lo
+                    }
+            )
+            (registerLo hi)
+            (registerHi lo)
 
     else
         Err (UnknownInstruction ( hi, lo ))

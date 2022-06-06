@@ -1,5 +1,9 @@
 module Memory exposing
     ( Memory
+    , displayStart
+    , get
+    , getDisplayActivePixels
+    , getDisplayByte
     , getInstruction
     , init
     , loadProgram
@@ -15,11 +19,13 @@ import Instruction exposing (Address(..), Byte(..), Instruction)
 import Instruction.Parser
 import List.Extra as List
 import Playground as P
+import RadixInt
+import Set exposing (Set)
 import Util
 
 
-type alias Memory =
-    Array Int
+type Memory
+    = Memory (Array Int)
 
 
 size : Int
@@ -37,26 +43,37 @@ programEnd =
     0x0E9F
 
 
+displayStart : Int
+displayStart =
+    0x0F00
+
+
+displaySizeBytes : Int
+displaySizeBytes =
+    0x0100
+
+
 init : Memory
 init =
-    Array.repeat size 0
+    Memory (Array.repeat size 0)
 
 
 toList : Memory -> List Int
-toList memory =
+toList (Memory memory) =
     Array.toList memory
 
 
 loadProgram : List Int -> Memory -> Memory
-loadProgram program memory =
+loadProgram program (Memory memory) =
     List.indexedFoldl
         (\i byte accMem -> Array.set (programStart + i) byte accMem)
         memory
         program
+        |> Memory
 
 
 get : Address -> Memory -> Result Error Byte
-get ((Address rawAddr) as addr) memory =
+get ((Address rawAddr) as addr) (Memory memory) =
     case Array.get rawAddr memory of
         Nothing ->
             Err (MemoryOverflow addr)
@@ -81,6 +98,67 @@ getInstruction ((Address rawAddr) as addr) memory =
 
     else
         Err (TriedToExecuteNonexecutableMemory addr)
+
+
+getDisplayByte : ( Int, Int ) -> Memory -> Result Error Byte
+getDisplayByte ( x, y ) memory =
+    let
+        addr : Address
+        addr =
+            Address (displayStart + x + Util.screenWidth * y)
+    in
+    get addr memory
+
+
+getDisplayActivePixels : Memory -> List ( Int, Int )
+getDisplayActivePixels memory =
+    toList memory
+        |> List.drop displayStart
+        |> List.indexedMap Tuple.pair
+        |> List.concatMap
+            (\( byteIndex, byte ) ->
+                let
+                    pxStart : Int
+                    pxStart =
+                        byteIndex * 8
+
+                    bits : List Int
+                    bits =
+                        byte
+                            |> RadixInt.fromInt (RadixInt.Base 2)
+                            |> RadixInt.toList
+                            |> List.reverse
+                            |> zeroPadLeft 8
+                in
+                bits
+                    |> List.indexedMap Tuple.pair
+                    |> List.filterMap
+                        (\( i, bit ) ->
+                            if bit == 1 then
+                                let
+                                    position : Int
+                                    position =
+                                        pxStart + i
+                                in
+                                Just
+                                    ( position |> modBy Util.screenWidth
+                                    , position // Util.screenWidth
+                                    )
+
+                            else
+                                Nothing
+                        )
+            )
+
+
+zeroPadLeft : Int -> List Int -> List Int
+zeroPadLeft length list =
+    let
+        toAdd : Int
+        toAdd =
+            max 0 (length - List.length list)
+    in
+    List.repeat toAdd 0 ++ list
 
 
 

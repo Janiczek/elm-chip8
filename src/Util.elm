@@ -14,6 +14,7 @@ module Util exposing
 import Bitwise
 import ParseInt
 import Playground as P
+import RadixInt
 
 
 viewPixel : P.Color -> Int -> Int -> P.Shape

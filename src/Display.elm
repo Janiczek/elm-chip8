@@ -1,13 +1,14 @@
 module Display exposing (view)
 
+import Memory exposing (Memory)
 import Playground as P
 import Util
 
 
-view : List P.Shape
-view =
-    [ viewDisplayBg
-    ]
+view : Memory -> List P.Shape
+view memory =
+    viewDisplayBg
+        :: List.map (\( x, y ) -> Util.viewPixel Util.black x y) (Memory.getDisplayActivePixels memory)
 
 
 viewDisplayBg : P.Shape

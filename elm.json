@@ -6,11 +6,13 @@
     "elm-version": "0.19.1",
     "dependencies": {
         "direct": {
+            "bitsoflogic/elm-radixint": "2.0.0",
             "elm/browser": "1.0.2",
             "elm/core": "1.0.5",
             "elm/html": "1.0.0",
             "elm/random": "1.0.0",
             "elm-community/list-extra": "8.5.2",
+            "elm-community/result-extra": "2.4.0",
             "fredcy/elm-parseint": "2.0.1",
             "justgook/webgl-playground": "5.0.0"
         },
