@@ -3,29 +3,50 @@ module Main exposing (main)
 import Playground as P
 
 
-main : Program () (P.Playground ()) P.Msg
+main : Program () (P.Playground Model) P.Msg
 main =
-    P.picture
-        [ displayBgShape
-        , pixelShape 1 3
-        , pixelShape 2 3
-        , pixelShape 3 3
-        , pixelShape 4 3
-        , pixelShape 0 0
-        ]
+    P.game view update init
+
+
+type alias Model =
+    { pixel : Int }
+
+
+init : Model
+init =
+    { pixel = 0 }
+
+
+view : P.Computer -> Model -> List P.Shape
+view computer model =
+    let
+        x =
+            model.pixel |> modBy screenWidth
+
+        y =
+            (model.pixel // screenWidth) |> modBy screenHeight
+    in
+    [ displayBgShape
+    , pixelShape x y
+    ]
+
+
+update : P.Computer -> Model -> Model
+update computer model =
+    { model | pixel = model.pixel + 1 }
 
 
 pixelShape : Int -> Int -> P.Shape
 pixelShape x y =
     P.square black screenScale
-        |> P.move -(screenWidth * screenScale / 2) (screenHeight * screenScale / 2)
+        |> P.move -(screenWidthScaled / 2) (screenHeightScaled / 2)
         |> P.move (screenScale / 2) -(screenScale / 2)
         |> P.move (toFloat x * screenScale) -(toFloat y * screenScale)
 
 
 displayBgShape : P.Shape
 displayBgShape =
-    P.rectangle white (screenWidth * screenScale) (screenHeight * screenScale)
+    P.rectangle white screenWidthScaled screenHeightScaled
 
 
 screenScale : Float
@@ -33,14 +54,24 @@ screenScale =
     4
 
 
-screenWidth : Float
+screenWidth : Int
 screenWidth =
     64
 
 
-screenHeight : Float
+screenHeight : Int
 screenHeight =
     32
+
+
+screenWidthScaled : Float
+screenWidthScaled =
+    toFloat screenWidth * screenScale
+
+
+screenHeightScaled : Float
+screenHeightScaled =
+    toFloat screenHeight * screenScale
 
 
 white : P.Color
