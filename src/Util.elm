@@ -1,5 +1,6 @@
 module Util exposing
     ( black
+    , bytePair
     , hex
     , hexBytePair
     , px
@@ -73,10 +74,13 @@ hex n =
     "0x" ++ ParseInt.toHex n
 
 
+bytePair : ( Int, Int ) -> Int
+bytePair ( hi, lo ) =
+    Bitwise.or
+        (Bitwise.shiftLeftBy 8 hi)
+        lo
+
+
 hexBytePair : ( Int, Int ) -> String
 hexBytePair ( hi, lo ) =
-    hex
-        (Bitwise.or
-            (Bitwise.shiftLeftBy 8 hi)
-            lo
-        )
+    hex (bytePair ( hi, lo ))

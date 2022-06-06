@@ -7,7 +7,6 @@ import Util
 view : List P.Shape
 view =
     [ viewDisplayBg
-    , Util.viewPixel Util.black 1 5
     ]
 
 

@@ -1,11 +1,14 @@
 module Main exposing (main)
 
+import Bitwise
 import Display
-import Error exposing (Error)
+import Error exposing (Error(..))
 import ExamplePrograms
-import Instruction exposing (Instruction(..))
+import Instruction exposing (Address(..), Byte(..), Instruction(..))
 import Memory exposing (Memory)
 import Playground as P
+import Random exposing (Generator)
+import Registers exposing (Registers)
 import Util
 
 
@@ -17,8 +20,11 @@ main =
 type alias Model =
     -- TODO some error state? don't run endlessly
     { memory : Memory
-    , pc : Int
+    , pc : Address
+    , i : Address
+    , registers : Registers
     , state : State
+    , randomSeed : Random.Seed
 
     -- DISPLAY: the 0x800 pixels = 0x100 bytes live inside 0xF00..0xFFF of the memory
     -- TODO: what about display : Set (Int, Int)
@@ -34,8 +40,13 @@ type State
 init : Model
 init =
     { memory = Memory.init |> Memory.loadProgram ExamplePrograms.maze
-    , pc = Memory.programStart
+    , pc = Address Memory.programStart
+    , i = Address 0
+    , registers = Registers.init
     , state = Running
+    , randomSeed =
+        -- TODO when we ditch the Playground package, wire in a random seed from JS flags
+        Random.initialSeed 0
     }
 
 
@@ -43,6 +54,12 @@ view : P.Computer -> Model -> List P.Shape
 view computer model =
     [ Display.view
     , Memory.view model.pc model.memory
+
+    -- TODO show the registers
+    -- TODO show pc
+    -- TODO show i
+    -- TODO show random seed
+    -- TODO show disassembled code
     , case model.state of
         Running ->
             []
@@ -66,7 +83,24 @@ update computer model =
 
 stepTimes : Int -> Model -> Model
 stepTimes n model =
-    doNTimes n step model
+    if isHalted model.state then
+        model
+
+    else
+        doNTimes n step model
+
+
+isHalted : State -> Bool
+isHalted state =
+    case state of
+        Halted _ ->
+            True
+
+        Paused ->
+            False
+
+        Running ->
+            False
 
 
 doNTimes : Int -> (a -> a) -> a -> a
@@ -80,26 +114,163 @@ doNTimes n fn value =
 
 step : Model -> Model
 step model =
-    case Memory.getInstruction model.pc model.memory of
-        Err err ->
-            { model | state = Halted err }
+    if isHalted model.state then
+        model
 
-        Ok instruction ->
-            model
-                |> runInstruction instruction
-                |> incrementPC
+    else
+        case Memory.getInstruction model.pc model.memory of
+            Err err ->
+                { model | state = Halted err }
+
+            Ok instruction ->
+                model
+                    |> runInstruction instruction
+                    -- TODO only increment in some cases (eg. not when jumping)
+                    |> incrementPC
 
 
 incrementPC : Model -> Model
 incrementPC model =
-    { model | pc = model.pc + 2 }
+    let
+        (Address pc) =
+            model.pc
+    in
+    { model | pc = Address (pc + 2) }
 
 
 runInstruction : Instruction -> Model -> Model
 runInstruction instruction model =
-    case instruction of
-        TodoInstruction ->
-            model
+    let
+        todo : Model -> Model
+        todo m =
+            { m | state = Halted (UnimplementedInstruction instruction) }
+    in
+    case Debug.log "run" instruction of
+        Clear ->
+            todo model
+
+        Return ->
+            todo model
+
+        Jump addr ->
+            todo model
+
+        Call addr ->
+            todo model
+
+        DoIfNeq reg (Byte byte) ->
+            let
+                regValue =
+                    Registers.get reg model.registers
+            in
+            if regValue /= byte then
+                model
+
+            else
+                incrementPC model
+
+        DoIfEq reg byte ->
+            todo model
+
+        DoIfNeqReg reg1 reg2 ->
+            todo model
+
+        SetRegConst reg byte ->
+            todo model
+
+        AddRegConst reg byte ->
+            todo model
+
+        SetRegReg { from, to } ->
+            todo model
+
+        OrRegReg { from, to } ->
+            todo model
+
+        AndRegReg { from, to } ->
+            todo model
+
+        XorRegReg { from, to } ->
+            todo model
+
+        AddRegReg { from, to } ->
+            todo model
+
+        SubRegReg { from, to } ->
+            todo model
+
+        ShiftRightRegReg { from, to } ->
+            todo model
+
+        SubReverseRegReg { from, to } ->
+            todo model
+
+        ShiftLeftRegReg { from, to } ->
+            todo model
+
+        DoIfEqReg reg1 reg2 ->
+            todo model
+
+        SetI addr ->
+            { model | i = addr }
+
+        JumpPlusV0 addr ->
+            todo model
+
+        SetRandomAnd register (Byte mask) ->
+            let
+                ( randomByte, newSeed ) =
+                    Random.step byteGenerator model.randomSeed
+
+                maskedByte : Int
+                maskedByte =
+                    Bitwise.and mask randomByte
+            in
+            { model
+                | randomSeed = newSeed
+                , registers = Registers.set register maskedByte model.registers
+            }
+
+        DrawSprite { vx, vy, height } ->
+            todo model
+
+        DoIfKeyNotPressed reg ->
+            todo model
+
+        DoIfKeyPressed reg ->
+            todo model
+
+        GetDelayTimer reg ->
+            todo model
+
+        SetPressedKey reg ->
+            todo model
+
+        SetDelayTimer reg ->
+            todo model
+
+        SetAudioTimer reg ->
+            todo model
+
+        AddI reg ->
+            todo model
+
+        SetIToFontAddr reg ->
+            todo model
+
+        BcdDecode reg ->
+            todo model
+
+        SaveRegsUpTo reg ->
+            todo model
+
+        LoadRegsUpTo reg ->
+            todo model
+
+
+byteGenerator : Generator Int
+byteGenerator =
+    Random.int 0 255
 
 
 

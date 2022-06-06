@@ -11,7 +11,8 @@ module Memory exposing
 
 import Array exposing (Array)
 import Error exposing (Error(..))
-import Instruction exposing (Instruction)
+import Instruction exposing (Address(..), Byte(..), Instruction)
+import Instruction.Parser
 import List.Extra as List
 import Playground as P
 import Util
@@ -54,27 +55,32 @@ loadProgram program memory =
         program
 
 
-get : Int -> Memory -> Result Error Int
-get addr memory =
-    case Array.get addr memory of
+get : Address -> Memory -> Result Error Byte
+get ((Address rawAddr) as addr) memory =
+    case Array.get rawAddr memory of
         Nothing ->
-            Err (MemoryOverflow { addr = addr })
+            Err (MemoryOverflow addr)
 
         Just byte ->
-            Ok byte
+            Ok (Byte byte)
 
 
-getInstruction : Int -> Memory -> Result Error Instruction
-getInstruction addr memory =
+isExecutable : Int -> Bool
+isExecutable addr =
+    addr >= programStart && (addr + 1) <= programEnd
+
+
+getInstruction : Address -> Memory -> Result Error Instruction
+getInstruction ((Address rawAddr) as addr) memory =
     -- instructions are 2 bytes long
-    if addr >= programStart && (addr + 1) <= programEnd then
+    if isExecutable rawAddr then
         Result.map2 Tuple.pair
             (get addr memory)
-            (get (addr + 1) memory)
-            |> Result.andThen Instruction.fromBytePair
+            (get (Address (rawAddr + 1)) memory)
+            |> Result.andThen Instruction.Parser.parse
 
     else
-        Err (TriedToExecuteNonexecutableMemory { addr = addr })
+        Err (TriedToExecuteNonexecutableMemory addr)
 
 
 
@@ -86,8 +92,8 @@ displayedWidth =
     64
 
 
-view : Int -> Memory -> List P.Shape
-view pc memory =
+view : Address -> Memory -> List P.Shape
+view (Address pc) memory =
     memory
         |> toList
         |> List.indexedMap

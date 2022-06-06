@@ -1,12 +1,15 @@
 module Error exposing (Error(..), toString)
 
+import Instruction exposing (Address(..), Instruction(..))
 import Util
 
 
 type Error
     = UnknownInstruction ( Int, Int )
-    | TriedToExecuteNonexecutableMemory { addr : Int }
-    | MemoryOverflow { addr : Int }
+    | UnimplementedInstruction Instruction
+    | TriedToExecuteNonexecutableMemory Address
+    | MemoryOverflow Address
+    | ParsedInvalidRegister Int
 
 
 toString : Error -> String
@@ -15,8 +18,14 @@ toString err =
         UnknownInstruction ( hi, lo ) ->
             "Tried to run an unknown instruction: " ++ Util.hexBytePair ( hi, lo )
 
-        TriedToExecuteNonexecutableMemory { addr } ->
+        UnimplementedInstruction instruction ->
+            "Tried to run an unimplemented instruction: " ++ Instruction.toString instruction
+
+        TriedToExecuteNonexecutableMemory (Address addr) ->
             "Tried to execute non-executable memory at address " ++ Util.hex addr
 
-        MemoryOverflow { addr } ->
+        MemoryOverflow (Address addr) ->
             "Tried to access memory out of bounds at address " ++ Util.hex addr
+
+        ParsedInvalidRegister reg ->
+            "Parsed invalid register: " ++ String.fromInt reg
