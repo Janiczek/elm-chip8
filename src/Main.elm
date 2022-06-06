@@ -1,7 +1,9 @@
 module Main exposing (main)
 
 import Display
+import Error exposing (Error)
 import ExamplePrograms
+import Instruction exposing (Instruction(..))
 import Memory exposing (Memory)
 import Playground as P
 import Util
@@ -13,20 +15,27 @@ main =
 
 
 type alias Model =
+    -- TODO some error state? don't run endlessly
     { memory : Memory
     , pc : Int
+    , state : State
 
     -- DISPLAY: the 0x800 pixels = 0x100 bytes live inside 0xF00..0xFFF of the memory
     -- TODO: what about display : Set (Int, Int)
     }
 
 
+type State
+    = Running
+    | Paused
+    | Halted Error
+
+
 init : Model
 init =
-    { memory =
-        Memory.init
-            |> Memory.loadProgram ExamplePrograms.maze
+    { memory = Memory.init |> Memory.loadProgram ExamplePrograms.maze
     , pc = Memory.programStart
+    , state = Running
     }
 
 
@@ -34,14 +43,63 @@ view : P.Computer -> Model -> List P.Shape
 view computer model =
     [ Display.view
     , Memory.view model.pc model.memory
+    , case model.state of
+        Running ->
+            []
+
+        Paused ->
+            [ P.words P.orange "Paused" ]
+
+        Halted err ->
+            [ P.words P.red (Error.toString err)
+                |> P.moveDown 96
+            ]
     ]
         |> List.concat
 
 
 update : P.Computer -> Model -> Model
 update computer model =
-    -- TODO
     model
+        |> stepTimes {- (min computer.time.delta 4) -} 1
+
+
+stepTimes : Int -> Model -> Model
+stepTimes n model =
+    doNTimes n step model
+
+
+doNTimes : Int -> (a -> a) -> a -> a
+doNTimes n fn value =
+    if n <= 0 then
+        value
+
+    else
+        doNTimes (n - 1) fn (fn value)
+
+
+step : Model -> Model
+step model =
+    case Memory.getInstruction model.pc model.memory of
+        Err err ->
+            { model | state = Halted err }
+
+        Ok instruction ->
+            model
+                |> runInstruction instruction
+                |> incrementPC
+
+
+incrementPC : Model -> Model
+incrementPC model =
+    { model | pc = model.pc + 2 }
+
+
+runInstruction : Instruction -> Model -> Model
+runInstruction instruction model =
+    case instruction of
+        TodoInstruction ->
+            model
 
 
 

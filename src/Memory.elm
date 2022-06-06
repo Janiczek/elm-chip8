@@ -1,5 +1,6 @@
 module Memory exposing
     ( Memory
+    , getInstruction
     , init
     , loadProgram
     , programStart
@@ -9,6 +10,8 @@ module Memory exposing
     )
 
 import Array exposing (Array)
+import Error exposing (Error(..))
+import Instruction exposing (Instruction)
 import List.Extra as List
 import Playground as P
 import Util
@@ -28,6 +31,11 @@ programStart =
     0x0200
 
 
+programEnd : Int
+programEnd =
+    0x0E9F
+
+
 init : Memory
 init =
     Array.repeat size 0
@@ -44,6 +52,33 @@ loadProgram program memory =
         (\i byte accMem -> Array.set (programStart + i) byte accMem)
         memory
         program
+
+
+get : Int -> Memory -> Result Error Int
+get addr memory =
+    case Array.get addr memory of
+        Nothing ->
+            Err (MemoryOverflow { addr = addr })
+
+        Just byte ->
+            Ok byte
+
+
+getInstruction : Int -> Memory -> Result Error Instruction
+getInstruction addr memory =
+    -- instructions are 2 bytes long
+    if addr >= programStart && (addr + 1) <= programEnd then
+        Result.map2 Tuple.pair
+            (get addr memory)
+            (get (addr + 1) memory)
+            |> Result.andThen Instruction.fromBytePair
+
+    else
+        Err (TriedToExecuteNonexecutableMemory { addr = addr })
+
+
+
+-- VIEW
 
 
 displayedWidth : Int

@@ -1,5 +1,7 @@
 module Util exposing
     ( black
+    , hex
+    , hexBytePair
     , px
     , screenHeightScaled
     , screenWidth
@@ -8,6 +10,8 @@ module Util exposing
     , white
     )
 
+import Bitwise
+import ParseInt
 import Playground as P
 
 
@@ -62,3 +66,17 @@ screenWidthScaled =
 screenHeightScaled : Float
 screenHeightScaled =
     toFloat (screenHeight * screenScale)
+
+
+hex : Int -> String
+hex n =
+    "0x" ++ ParseInt.toHex n
+
+
+hexBytePair : ( Int, Int ) -> String
+hexBytePair ( hi, lo ) =
+    hex
+        (Bitwise.or
+            (Bitwise.shiftLeftBy 8 hi)
+            lo
+        )
