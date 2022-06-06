@@ -1,10 +1,56 @@
 module Main exposing (main)
 
-import Html
+import Playground as P
 
 
+main : Program () (P.Playground ()) P.Msg
 main =
-    Html.text "Hello CHIP-8 !!"
+    P.picture
+        [ displayBgShape
+        , pixelShape 1 3
+        , pixelShape 2 3
+        , pixelShape 3 3
+        , pixelShape 4 3
+        , pixelShape 0 0
+        ]
+
+
+pixelShape : Int -> Int -> P.Shape
+pixelShape x y =
+    P.square black screenScale
+        |> P.move -(screenWidth * screenScale / 2) (screenHeight * screenScale / 2)
+        |> P.move (screenScale / 2) -(screenScale / 2)
+        |> P.move (toFloat x * screenScale) -(toFloat y * screenScale)
+
+
+displayBgShape : P.Shape
+displayBgShape =
+    P.rectangle white (screenWidth * screenScale) (screenHeight * screenScale)
+
+
+screenScale : Float
+screenScale =
+    4
+
+
+screenWidth : Float
+screenWidth =
+    64
+
+
+screenHeight : Float
+screenHeight =
+    32
+
+
+white : P.Color
+white =
+    P.rgb 253 246 227
+
+
+black : P.Color
+black =
+    P.rgb 101 123 131
 
 
 
