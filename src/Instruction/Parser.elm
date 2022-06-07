@@ -89,6 +89,11 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
         registerLo hi
             |> Result.map (\reg -> DoIfEq reg lo_)
 
+    else if hh == 0x05 then
+        Result.map2 DoIfNeqReg
+            (registerLo hi)
+            (registerHi lo)
+
     else if hh == 0x06 then
         registerLo hi
             |> Result.map (\reg -> SetRegConst reg lo_)

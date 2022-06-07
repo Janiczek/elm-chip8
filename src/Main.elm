@@ -613,7 +613,11 @@ runInstruction instruction model =
                 incrementPC model
 
         DoIfNeqReg reg1 reg2 ->
-            todo model
+            if Registers.get reg1 model.registers /= Registers.get reg2 model.registers then
+                model
+
+            else
+                incrementPC model
 
         SetRegConst reg (Byte byte) ->
             { model | registers = Registers.set reg byte model.registers }
