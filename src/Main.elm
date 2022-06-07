@@ -630,7 +630,12 @@ runInstruction instruction model =
             todo model
 
         AndRegReg { from, to } ->
-            todo model
+            { model
+                | registers =
+                    Registers.map to
+                        (\oldTo -> Bitwise.and oldTo (Registers.get from model.registers))
+                        model.registers
+            }
 
         XorRegReg { from, to } ->
             todo model
@@ -774,7 +779,35 @@ runInstruction instruction model =
             todo model
 
         LoadRegsUpTo reg ->
-            todo model
+            let
+                regs : List Register
+                regs =
+                    Registers.upTo reg
+
+                n : Int
+                n =
+                    Registers.index reg
+
+                (Address i) =
+                    model.i
+
+                loadedBytes : Result Error (List Byte)
+                loadedBytes =
+                    List.range i (i + n)
+                        |> Result.combineMap (\addr -> Memory.get (Address addr) model.memory)
+            in
+            case loadedBytes of
+                Err err ->
+                    { model | state = Halted err }
+
+                Ok bytes ->
+                    { model
+                        | registers =
+                            List.foldl
+                                (\( reg_, Byte byte ) accRegisters -> Registers.set reg_ byte accRegisters)
+                                model.registers
+                                (List.map2 Tuple.pair regs bytes)
+                    }
 
 
 byteGenerator : Generator Int

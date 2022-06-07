@@ -98,6 +98,11 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
             (registerLo hi)
             (registerHi lo)
 
+    else if hh == 0x08 && ll == 0x02 then
+        Result.map2 (\vx vy -> AndRegReg { from = vy, to = vx })
+            (registerLo hi)
+            (registerHi lo)
+
     else if hh == 0x0A then
         Ok (SetI (address pair))
 
@@ -128,6 +133,10 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
     else if hh == 0x0F && lo == 0x1E then
         registerLo hi
             |> Result.map (\reg -> AddI reg)
+
+    else if hh == 0x0F && lo == 0x65 then
+        registerLo hi
+            |> Result.map (\reg -> LoadRegsUpTo reg)
 
     else
         err
