@@ -133,10 +133,10 @@ view model =
                 ]
             , Html.div []
                 [ viewRegisters model
+                , viewDisassembledCode model
                 , viewCallStack model.callStack
 
                 -- TODO viewInitialSeed model.randomSeed
-                , viewDisassembledCode model
                 ]
             ]
         ]
@@ -352,7 +352,7 @@ update msg model =
     case msg of
         Tick msDelta ->
             ( model
-                |> stepTimes (min (round msDelta) 4)
+                |> stepTimes (round msDelta)
             , Cmd.none
             )
 
@@ -645,7 +645,32 @@ runInstruction instruction model =
             todo model
 
         AddRegReg { from, to } ->
-            todo model
+            let
+                oldTo =
+                    Registers.get to model.registers
+
+                from_ =
+                    Registers.get from model.registers
+
+                rawNewTo =
+                    oldTo + from_
+
+                newTo =
+                    rawNewTo |> modBy 0xFF
+
+                newVF =
+                    if rawNewTo > 0xFF then
+                        1
+
+                    else
+                        0
+            in
+            { model
+                | registers =
+                    model.registers
+                        |> Registers.set to newTo
+                        |> Registers.set VF newVF
+            }
 
         SubRegReg { from, to } ->
             todo model

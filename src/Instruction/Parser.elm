@@ -107,6 +107,11 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
             (registerLo hi)
             (registerHi lo)
 
+    else if hh == 0x08 && ll == 0x04 then
+        Result.map2 (\vx vy -> AddRegReg { from = vy, to = vx })
+            (registerLo hi)
+            (registerHi lo)
+
     else if hh == 0x0A then
         Ok (SetI (address pair))
 

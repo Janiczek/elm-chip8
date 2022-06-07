@@ -172,6 +172,10 @@ arguments instruction =
         twoRegs : Register -> Register -> String
         twoRegs r1 r2 =
             Registers.name r1 ++ ", " ++ Registers.name r2
+
+        fromTo : Register -> Register -> String
+        fromTo from to =
+            Registers.name from ++ " -> " ++ Registers.name to
     in
     case instruction of
         Clear ->
@@ -202,31 +206,31 @@ arguments instruction =
             Registers.name reg ++ ", " ++ Util.hex byte
 
         SetRegReg { from, to } ->
-            twoRegs from to
+            fromTo from to
 
         OrRegReg { from, to } ->
-            twoRegs from to
+            fromTo from to
 
         AndRegReg { from, to } ->
-            twoRegs from to
+            fromTo from to
 
         XorRegReg { from, to } ->
-            twoRegs from to
+            fromTo from to
 
         AddRegReg { from, to } ->
-            twoRegs from to
+            fromTo from to
 
         SubRegReg { from, to } ->
-            twoRegs from to
+            fromTo from to
 
         ShiftRightRegReg { from, to } ->
-            twoRegs from to
+            fromTo from to
 
         SubReverseRegReg { from, to } ->
-            twoRegs from to
+            fromTo from to
 
         ShiftLeftRegReg { from, to } ->
-            twoRegs from to
+            fromTo from to
 
         DoIfEqReg reg1 reg2 ->
             twoRegs reg1 reg2
