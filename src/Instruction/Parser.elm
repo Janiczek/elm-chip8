@@ -147,6 +147,10 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
         registerLo hi
             |> Result.map (\reg -> AddI reg)
 
+    else if hh == 0x0F && lo == 0x55 then
+        registerLo hi
+            |> Result.map (\reg -> SaveRegsUpTo reg)
+
     else if hh == 0x0F && lo == 0x65 then
         registerLo hi
             |> Result.map (\reg -> LoadRegsUpTo reg)

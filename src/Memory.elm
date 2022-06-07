@@ -8,6 +8,7 @@ module Memory exposing
     , init
     , loadProgram
     , programStart
+    , set
     , size
     , toList
     , view
@@ -86,7 +87,16 @@ get ((Address rawAddr) as addr) (Memory memory) =
 
 
 set : Address -> Int -> Memory -> Result Error Memory
-set ((Address rawAddr) as addr) value (Memory memory) =
+set ((Address rawAddr) as addr) value memory =
+    if isWritable rawAddr then
+        setUnsafe addr value memory
+
+    else
+        Err (MemoryOverflow addr)
+
+
+setUnsafe : Address -> Int -> Memory -> Result Error Memory
+setUnsafe ((Address rawAddr) as addr) value (Memory memory) =
     memory
         |> Array.set rawAddr value
         |> Memory
@@ -96,6 +106,12 @@ set ((Address rawAddr) as addr) value (Memory memory) =
 isExecutable : Int -> Bool
 isExecutable addr =
     addr >= programStart && (addr + 1) <= programEnd
+
+
+isWritable : Int -> Bool
+isWritable addr =
+    -- same thing
+    isExecutable addr
 
 
 getInstruction : Address -> Memory -> Result Error Instruction
@@ -160,7 +176,7 @@ xorDisplayBit ( x, y ) xorBit memory =
                             (Bitwise.and byte (Bitwise.complement mask))
                             (Bitwise.shiftLeftBy (7 - bitIndexInsideByte) resultBit)
                 in
-                set addr resultByte memory
+                setUnsafe addr resultByte memory
                     |> Result.map (\newMemory -> ( newMemory, { hadCollision = hadCollision } ))
             )
 

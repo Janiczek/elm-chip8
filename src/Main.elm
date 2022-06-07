@@ -827,7 +827,39 @@ runInstruction instruction model =
             todo model
 
         SaveRegsUpTo reg ->
-            todo model
+            let
+                regs : List Register
+                regs =
+                    Registers.upTo reg
+
+                n : Int
+                n =
+                    Registers.index reg
+
+                (Address i) =
+                    model.i
+
+                bytesToSave : List Int
+                bytesToSave =
+                    List.map (\reg_ -> Registers.get reg_ model.registers) regs
+
+                savedToMemory : Result Error Memory
+                savedToMemory =
+                    bytesToSave
+                        |> List.indexedMap Tuple.pair
+                        |> List.foldl
+                            (\( di, byte ) accMemory ->
+                                accMemory
+                                    |> Result.andThen (\mem -> Memory.set (Address (i + di)) byte mem)
+                            )
+                            (Ok model.memory)
+            in
+            case savedToMemory of
+                Err err ->
+                    { model | state = Halted err }
+
+                Ok newMemory ->
+                    { model | memory = newMemory }
 
         LoadRegsUpTo reg ->
             let
