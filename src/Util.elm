@@ -83,6 +83,11 @@ hex n =
     "0x" ++ ParseInt.toHex n
 
 
+hex4 : Int -> String
+hex4 n =
+    "0x" ++ String.padLeft 4 '0' (ParseInt.toHex n)
+
+
 bytePair : ( Int, Int ) -> Int
 bytePair ( hi, lo ) =
     Bitwise.or
@@ -92,7 +97,7 @@ bytePair ( hi, lo ) =
 
 hexBytePair : ( Int, Int ) -> String
 hexBytePair ( hi, lo ) =
-    hex (bytePair ( hi, lo ))
+    hex4 (bytePair ( hi, lo ))
 
 
 toBitList : Int -> List Int
