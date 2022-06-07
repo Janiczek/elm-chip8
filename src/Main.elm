@@ -505,13 +505,13 @@ shouldIncrementPC instruction =
         SubRegReg _ ->
             True
 
-        ShiftRightBy1Reg _ ->
+        ShiftRightBy1 _ ->
             True
 
         SubReverseRegReg _ ->
             True
 
-        ShiftLeftBy1Reg _ ->
+        ShiftLeftBy1 _ ->
             True
 
         DoIfEqReg _ _ ->
@@ -679,25 +679,40 @@ runInstruction instruction model =
         SubRegReg { from, to } ->
             todo model
 
-        ShiftRightBy1Reg reg ->
-            todo model
+        ShiftRightBy1 { from, to } ->
+            let
+                from_ =
+                    Registers.get from model.registers
+
+                newValue =
+                    from_
+                        |> Bitwise.shiftRightZfBy 1
+
+                newVF =
+                    Bitwise.and 0x01 from_
+            in
+            { model
+                | registers =
+                    model.registers
+                        |> Registers.set to newValue
+                        |> Registers.set VF newVF
+            }
 
         SubReverseRegReg { from, to } ->
             todo model
 
-        ShiftLeftBy1Reg reg ->
+        ShiftLeftBy1 { from, to } ->
             let
-                oldValue =
-                    Registers.get reg model.registers
+                from_ =
+                    Registers.get from model.registers
 
                 newValue =
-                    oldValue
+                    from_
                         |> Bitwise.shiftLeftBy 1
                         |> modBy 0x0100
 
                 newVF =
-                    -- is MSB set?
-                    if oldValue > 0x7F then
+                    if from_ > 0x7F then
                         1
 
                     else
@@ -706,7 +721,7 @@ runInstruction instruction model =
             { model
                 | registers =
                     model.registers
-                        |> Registers.set reg newValue
+                        |> Registers.set to newValue
                         |> Registers.set VF newVF
             }
 

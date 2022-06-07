@@ -117,9 +117,15 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
             (registerLo hi)
             (registerHi lo)
 
+    else if hh == 0x08 && ll == 0x06 then
+        Result.map2 (\vx vy -> ShiftRightBy1 { from = vy, to = vx })
+            (registerLo hi)
+            (registerHi lo)
+
     else if hh == 0x08 && ll == 0x0E then
-        registerLo hi
-            |> Result.map ShiftLeftBy1Reg
+        Result.map2 (\vx vy -> ShiftLeftBy1 { from = vy, to = vx })
+            (registerLo hi)
+            (registerHi lo)
 
     else if hh == 0x0A then
         Ok (SetI (address pair))
