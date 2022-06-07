@@ -173,8 +173,14 @@ runInstruction instruction model =
         SetRegConst reg byte ->
             todo model
 
-        AddRegConst reg byte ->
-            todo model
+        AddRegConst reg (Byte byte) ->
+            { model
+                | registers =
+                    Registers.map
+                        reg
+                        (\regValue -> min 255 (regValue + byte))
+                        model.registers
+            }
 
         SetRegReg { from, to } ->
             todo model

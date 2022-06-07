@@ -3,6 +3,7 @@ module Registers exposing
     , Registers
     , get
     , init
+    , map
     , register
     , set
     )
@@ -227,3 +228,17 @@ register n =
 
         _ ->
             Nothing
+
+
+map : Register -> (Int -> Int) -> Registers -> Registers
+map reg fn registers =
+    let
+        value : Int
+        value =
+            get reg registers
+
+        newValue : Int
+        newValue =
+            fn value
+    in
+    set reg newValue registers
