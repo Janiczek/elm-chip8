@@ -76,8 +76,7 @@ view computer model =
 update : P.Computer -> Model -> Model
 update computer model =
     model
-        -- |> stepTimes {- (min computer.time.delta 4) -} 1
-        |> step
+        |> stepTimes (min computer.time.delta 4)
 
 
 stepTimes : Int -> Model -> Model
@@ -258,7 +257,7 @@ runInstruction instruction model =
         todo m =
             { m | state = Halted (UnimplementedInstruction instruction) }
     in
-    case Debug.log "run" instruction of
+    case instruction of
         Clear ->
             todo model
 
@@ -284,8 +283,8 @@ runInstruction instruction model =
         DoIfNeqReg reg1 reg2 ->
             todo model
 
-        SetRegConst reg byte ->
-            todo model
+        SetRegConst reg (Byte byte) ->
+            { model | registers = Registers.set reg byte model.registers }
 
         AddRegConst reg (Byte byte) ->
             { model
