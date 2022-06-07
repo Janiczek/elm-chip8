@@ -605,8 +605,12 @@ runInstruction instruction model =
             else
                 incrementPC model
 
-        DoIfEq reg byte ->
-            todo model
+        DoIfEq reg (Byte byte) ->
+            if Registers.get reg model.registers == byte then
+                model
+
+            else
+                incrementPC model
 
         DoIfNeqReg reg1 reg2 ->
             todo model
