@@ -624,7 +624,7 @@ runInstruction instruction model =
             }
 
         SetRegReg { from, to } ->
-            todo model
+            { model | registers = Registers.set to (Registers.get from model.registers) model.registers }
 
         OrRegReg { from, to } ->
             todo model

@@ -64,6 +64,10 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
         hh : Int
         hh =
             hiNibble hi
+
+        ll : Int
+        ll =
+            loNibble lo
     in
     if hi == 0x00 && lo == 0xE0 then
         Ok Clear
@@ -88,6 +92,11 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
     else if hh == 0x07 then
         registerLo hi
             |> Result.map (\reg -> AddRegConst reg lo_)
+
+    else if hh == 0x08 && ll == 0x00 then
+        Result.map2 (\vx vy -> SetRegReg { from = vy, to = vx })
+            (registerLo hi)
+            (registerHi lo)
 
     else if hh == 0x0A then
         Ok (SetI (address pair))
