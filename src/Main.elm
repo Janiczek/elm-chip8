@@ -40,6 +40,7 @@ type alias Model =
     , i : Address
     , registers : Registers
     , delayTimer : Int
+    , callStack : List Address
     , state : State
     , randomSeed : Random.Seed
     , initialSeed : Int
@@ -74,6 +75,7 @@ init flags =
       , i = Address 0
       , registers = Registers.init
       , delayTimer = 0
+      , callStack = []
       , state = Paused
       , randomSeed = Random.initialSeed flags.initialSeed
       , initialSeed = flags.initialSeed
@@ -90,6 +92,7 @@ loadROM rom model =
         , i = Address 0
         , registers = Registers.init
         , delayTimer = 0
+        , callStack = []
         , state = Paused
         , randomSeed = Random.initialSeed model.initialSeed
     }
@@ -103,6 +106,7 @@ reset model =
         , i = Address 0
         , registers = Registers.init
         , delayTimer = 0
+        , callStack = []
         , state = Paused
         , randomSeed = Random.initialSeed model.initialSeed
     }
@@ -129,6 +133,7 @@ view model =
                 ]
             , Html.div []
                 [ viewRegisters model
+                , viewCallStack model.callStack
 
                 -- TODO viewInitialSeed model.randomSeed
                 , viewDisassembledCode model
@@ -186,6 +191,22 @@ viewButtons state =
                 )
                 ExamplePrograms.all
             )
+        ]
+
+
+viewCallStack : List Address -> Html msg
+viewCallStack callStack =
+    Html.div []
+        [ Html.h2 [] [ Html.text "Call stack" ]
+        , if List.isEmpty callStack then
+            Html.text "- empty -"
+
+          else
+            Html.ul []
+                (List.map
+                    (\(Address addr) -> Html.li [] [ Html.text <| Util.hex addr ])
+                    callStack
+                )
         ]
 
 
@@ -560,7 +581,14 @@ runInstruction instruction model =
             { model | pc = addr }
 
         Call addr ->
-            todo model
+            let
+                (Address pc) =
+                    model.pc
+            in
+            { model
+                | pc = addr
+                , callStack = Address (pc + 2) :: model.callStack
+            }
 
         DoIfNeq reg (Byte byte) ->
             if Registers.get reg model.registers /= byte then

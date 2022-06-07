@@ -71,6 +71,9 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
     else if hh == 0x01 then
         Ok (Jump (address pair))
 
+    else if hh == 0x02 then
+        Ok (Call (address pair))
+
     else if hh == 0x03 then
         registerLo hi
             |> Result.map (\reg -> DoIfNeq reg lo_)
