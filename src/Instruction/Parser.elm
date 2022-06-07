@@ -68,6 +68,9 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
     if hi == 0x00 && lo == 0xE0 then
         Ok Clear
 
+    else if hi == 0x00 && lo == 0xEE then
+        Ok Return
+
     else if hh == 0x01 then
         Ok (Jump (address pair))
 
@@ -104,6 +107,10 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
             )
             (registerLo hi)
             (registerHi lo)
+
+    else if hh == 0x0F && lo == 0x07 then
+        registerLo hi
+            |> Result.map (\reg -> GetDelayTimer reg)
 
     else if hh == 0x0F && lo == 0x15 then
         registerLo hi

@@ -575,7 +575,15 @@ runInstruction instruction model =
             { model | memory = Memory.clearDisplay model.memory }
 
         Return ->
-            todo model
+            case model.callStack of
+                addr :: rest ->
+                    { model
+                        | pc = addr
+                        , callStack = rest
+                    }
+
+                _ ->
+                    { model | state = Halted ReturningWithEmptyCallStack }
 
         Jump addr ->
             { model | pc = addr }
@@ -738,7 +746,7 @@ runInstruction instruction model =
             todo model
 
         GetDelayTimer reg ->
-            todo model
+            { model | registers = Registers.set reg model.delayTimer model.registers }
 
         SetPressedKey reg ->
             todo model

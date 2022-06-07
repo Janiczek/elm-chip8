@@ -10,6 +10,7 @@ type Error
     | TriedToExecuteNonexecutableMemory Address
     | MemoryOverflow Address
     | ParsedInvalidRegister Int
+    | ReturningWithEmptyCallStack
 
 
 toString : Error -> String
@@ -29,3 +30,6 @@ toString err =
 
         ParsedInvalidRegister reg ->
             "Parsed invalid register: " ++ String.fromInt reg
+
+        ReturningWithEmptyCallStack ->
+            "Returning with empty call stack"
