@@ -59,9 +59,14 @@ type State
     | Halted Error
 
 
+initROM : ProgramROM
+initROM =
+    Trip8
+
+
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program Maze)
+    ( { memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program initROM)
       , pc = Address Memory.programStart
       , i = Address 0
       , registers = Registers.init
@@ -88,7 +93,7 @@ loadROM rom model =
 reset : Model -> Model
 reset model =
     { model
-        | memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program Maze)
+        | memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program initROM)
         , pc = Address Memory.programStart
         , i = Address 0
         , registers = Registers.init
@@ -522,7 +527,7 @@ runInstruction instruction model =
     in
     case instruction of
         Clear ->
-            todo model
+            { model | memory = Memory.clearDisplay model.memory }
 
         Return ->
             todo model

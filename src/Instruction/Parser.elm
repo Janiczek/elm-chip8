@@ -57,11 +57,18 @@ loNibble byte =
 parse : ( Byte, Byte ) -> Result Error Instruction
 parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
     let
+        err : Result Error Instruction
+        err =
+            Err (UnknownInstruction ( hi, lo ))
+
         hh : Int
         hh =
             hiNibble hi
     in
-    if hh == 0x01 then
+    if hi == 0x00 && lo == 0xE0 then
+        Ok Clear
+
+    else if hh == 0x01 then
         Ok (Jump (address pair))
 
     else if hh == 0x03 then
@@ -95,5 +102,9 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
             (registerLo hi)
             (registerHi lo)
 
+    else if hh == 0x0F && lo == 0x15 then
+        registerLo hi
+            |> Result.map (\reg -> SetDelayTimer reg)
+
     else
-        Err (UnknownInstruction ( hi, lo ))
+        err

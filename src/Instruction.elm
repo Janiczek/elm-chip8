@@ -168,6 +168,11 @@ toString instruction =
 
 arguments : Instruction -> String
 arguments instruction =
+    let
+        twoRegs : Register -> Register -> String
+        twoRegs r1 r2 =
+            Registers.name r1 ++ ", " ++ Registers.name r2
+    in
     case instruction of
         Clear ->
             ""
@@ -182,49 +187,49 @@ arguments instruction =
             Util.hex addr
 
         DoIfNeq reg (Byte byte) ->
-            Debug.toString reg ++ ", " ++ Util.hex byte
+            Registers.name reg ++ ", " ++ Util.hex byte
 
         DoIfEq reg (Byte byte) ->
-            Debug.toString reg ++ ", " ++ Util.hex byte
+            Registers.name reg ++ ", " ++ Util.hex byte
 
         DoIfNeqReg reg1 reg2 ->
-            Debug.toString ( reg1, reg2 )
+            twoRegs reg1 reg2
 
         SetRegConst reg (Byte byte) ->
-            Debug.toString reg ++ ", " ++ Util.hex byte
+            Registers.name reg ++ ", " ++ Util.hex byte
 
         AddRegConst reg (Byte byte) ->
-            Debug.toString reg ++ ", " ++ Util.hex byte
+            Registers.name reg ++ ", " ++ Util.hex byte
 
         SetRegReg { from, to } ->
-            Debug.toString ( from, to )
+            twoRegs from to
 
         OrRegReg { from, to } ->
-            Debug.toString ( from, to )
+            twoRegs from to
 
         AndRegReg { from, to } ->
-            Debug.toString ( from, to )
+            twoRegs from to
 
         XorRegReg { from, to } ->
-            Debug.toString ( from, to )
+            twoRegs from to
 
         AddRegReg { from, to } ->
-            Debug.toString ( from, to )
+            twoRegs from to
 
         SubRegReg { from, to } ->
-            Debug.toString ( from, to )
+            twoRegs from to
 
         ShiftRightRegReg { from, to } ->
-            Debug.toString ( from, to )
+            twoRegs from to
 
         SubReverseRegReg { from, to } ->
-            Debug.toString ( from, to )
+            twoRegs from to
 
         ShiftLeftRegReg { from, to } ->
-            Debug.toString ( from, to )
+            twoRegs from to
 
         DoIfEqReg reg1 reg2 ->
-            Debug.toString ( reg1, reg2 )
+            twoRegs reg1 reg2
 
         SetI (Address addr) ->
             Util.hex addr
@@ -233,40 +238,40 @@ arguments instruction =
             Util.hex addr
 
         SetRandomAnd reg (Byte byte) ->
-            Debug.toString reg ++ ", " ++ Util.hex byte
+            Registers.name reg ++ ", " ++ Util.hex byte
 
         DrawSprite { vx, vy, height } ->
-            Debug.toString ( vx, vy, height )
+            Registers.name vx ++ ", " ++ Registers.name vy ++ ", " ++ String.fromInt height
 
         DoIfKeyNotPressed reg ->
-            Debug.toString reg
+            Registers.name reg
 
         DoIfKeyPressed reg ->
-            Debug.toString reg
+            Registers.name reg
 
         GetDelayTimer reg ->
-            Debug.toString reg
+            Registers.name reg
 
         SetPressedKey reg ->
-            Debug.toString reg
+            Registers.name reg
 
         SetDelayTimer reg ->
-            Debug.toString reg
+            Registers.name reg
 
         SetAudioTimer reg ->
-            Debug.toString reg
+            Registers.name reg
 
         AddI reg ->
-            Debug.toString reg
+            Registers.name reg
 
         SetIToFontAddr reg ->
-            Debug.toString reg
+            Registers.name reg
 
         BcdDecode reg ->
-            Debug.toString reg
+            Registers.name reg
 
         SaveRegsUpTo reg ->
-            Debug.toString reg
+            Registers.name reg
 
         LoadRegsUpTo reg ->
-            Debug.toString reg
+            Registers.name reg

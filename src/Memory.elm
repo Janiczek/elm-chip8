@@ -1,5 +1,6 @@
 module Memory exposing
     ( Memory
+    , clearDisplay
     , displayStart
     , get
     , getDisplayActivePixels
@@ -270,3 +271,18 @@ view { pc, i } memory =
                     )
             )
         ]
+
+
+clearDisplay : Memory -> Memory
+clearDisplay (Memory memory) =
+    Memory
+        (Array.indexedMap
+            (\i val ->
+                if i >= displayStart then
+                    0
+
+                else
+                    val
+            )
+            memory
+        )
