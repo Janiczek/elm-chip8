@@ -222,8 +222,15 @@ displayedHeight =
     size // displayedWidth
 
 
-view : Address -> Memory -> Html msg
-view (Address pc) memory =
+view : { pc : Address, i : Address } -> Memory -> Html msg
+view { pc, i } memory =
+    let
+        (Address pc_) =
+            pc
+
+        (Address i_) =
+            i
+    in
     Html.div []
         [ Html.h2 [] [ Html.text "Memory" ]
         , Html.div
@@ -234,15 +241,15 @@ view (Address pc) memory =
             (memory
                 |> toList
                 |> List.indexedMap
-                    (\i byte ->
+                    (\index byte ->
                         let
                             x : Int
                             x =
-                                i |> modBy displayedWidth
+                                index |> modBy displayedWidth
 
                             y : Int
                             y =
-                                i // displayedWidth
+                                index // displayedWidth
 
                             b : String
                             b =
@@ -250,8 +257,11 @@ view (Address pc) memory =
 
                             color : String
                             color =
-                                if pc == i then
+                                if index == pc_ then
                                     "red"
+
+                                else if index == i_ then
+                                    "yellow"
 
                                 else
                                     "rgb(" ++ b ++ "," ++ b ++ "," ++ b ++ ")"

@@ -10,6 +10,7 @@ import Html exposing (Html)
 import Html.Attributes as Attrs
 import Html.Events as Events
 import Instruction exposing (Address(..), Byte(..), Instruction(..))
+import Instruction.Parser
 import Memory exposing (Memory)
 import Random exposing (Generator)
 import Registers exposing (Register(..), Registers)
@@ -48,6 +49,7 @@ type Msg
     | RunClicked
     | PauseClicked
     | ResetClicked
+    | StepClicked
 
 
 type State
@@ -88,13 +90,17 @@ view model =
     { title = "CHIP-8 Emulator"
     , body =
         [ Display.view model.memory
-        , Memory.view model.pc model.memory
+        , Memory.view
+            { pc = model.pc
+            , i = model.i
+            }
+            model.memory
         , viewState model.state
         , viewButtons model.state
         , viewRegisters model
+        , viewDisassembledCode model
 
-        --, viewInitialSeed model.randomSeed
-        --, viewDisassembledCode code
+        -- TODO viewInitialSeed model.randomSeed
         ]
     }
 
@@ -132,6 +138,9 @@ viewButtons state =
         , Html.button
             [ Events.onClick ResetClicked ]
             [ Html.text "Reset" ]
+        , Html.button
+            [ Events.onClick StepClicked ]
+            [ Html.text "Step" ]
         ]
 
 
@@ -174,6 +183,79 @@ viewRegisters { pc, i, registers } =
         ]
 
 
+viewDisassembledCode : Model -> Html msg
+viewDisassembledCode model =
+    let
+        (Address pc) =
+            model.pc
+
+        range : List ( Address, ( Byte, Byte ) )
+        range =
+            List.range -5 5
+                |> List.filterMap
+                    (\delta ->
+                        let
+                            address1 =
+                                Address (pc + 2 * delta)
+
+                            address2 =
+                                Address (pc + 2 * delta + 1)
+                        in
+                        Result.map2 (\hi lo -> ( address1, ( hi, lo ) ))
+                            (Memory.get address1 model.memory)
+                            (Memory.get address2 model.memory)
+                            |> Result.toMaybe
+                    )
+
+        viewLine : ( Address, ( Byte, Byte ) ) -> Html msg
+        viewLine ( Address addr, ( (Byte hi_) as hi, (Byte lo_) as lo ) ) =
+            let
+                instruction : String
+                instruction =
+                    case Instruction.Parser.parse ( hi, lo ) of
+                        Err _ ->
+                            ""
+
+                        Ok instr ->
+                            Instruction.toString instr
+            in
+            Html.tr
+                [ Attrs.style "background-color"
+                    (if addr == pc then
+                        "yellow"
+
+                     else
+                        "transparent"
+                    )
+                ]
+                [ Html.td [ cellPadding ] [ Html.text <| Util.hex addr ]
+                , Html.td [ cellPadding ] [ Html.text <| Util.hexBytePair ( hi_, lo_ ) ]
+                , Html.td [ cellPadding ] [ Html.text instruction ]
+                ]
+
+        cellPadding =
+            Attrs.style "padding" "0 4px"
+    in
+    Html.div
+        []
+        [ Html.h2 [] [ Html.text "Code" ]
+        , Html.table
+            [ Attrs.style "border-collapse" "collapse"
+            , Attrs.style "font-family" "Menlo, Monaco, \"Cascadia Mono\", Consolas, \"Courier New\", monospace"
+            ]
+            [ Html.thead []
+                [ Html.tr []
+                    [ Html.th [ cellPadding ] [ Html.text "Address" ]
+                    , Html.th [ cellPadding ] [ Html.text "Opcode" ]
+                    , Html.th [ cellPadding ] [ Html.text "Instruction" ]
+                    ]
+                ]
+            , Html.tbody []
+                (List.map viewLine range)
+            ]
+        ]
+
+
 subscriptions : Model -> Sub Msg
 subscriptions model =
     if isRunning model.state then
@@ -207,11 +289,16 @@ update msg model =
             , Cmd.none
             )
 
+        StepClicked ->
+            ( step model
+            , Cmd.none
+            )
+
 
 stepTimes : Int -> Model -> Model
 stepTimes n model =
     if isRunning model.state then
-        doNTimes n step model
+        doNTimes n stepIfRunning model
 
     else
         model
@@ -239,20 +326,25 @@ doNTimes n fn value =
         doNTimes (n - 1) fn (fn value)
 
 
-step : Model -> Model
-step model =
+stepIfRunning : Model -> Model
+stepIfRunning model =
     if isRunning model.state then
-        case Memory.getInstruction model.pc model.memory of
-            Err err ->
-                { model | state = Halted err }
-
-            Ok instruction ->
-                model
-                    |> runInstruction instruction
-                    |> incrementPCIfNeeded instruction
+        step model
 
     else
         model
+
+
+step : Model -> Model
+step model =
+    case Memory.getInstruction model.pc model.memory of
+        Err err ->
+            { model | state = Halted err }
+
+        Ok instruction ->
+            model
+                |> runInstruction instruction
+                |> incrementPCIfNeeded instruction
 
 
 incrementPCIfNeeded : Instruction -> Model -> Model
