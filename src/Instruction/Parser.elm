@@ -112,6 +112,10 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
             (registerLo hi)
             (registerHi lo)
 
+    else if hh == 0x08 && ll == 0x0E then
+        registerLo hi
+            |> Result.map ShiftLeftBy1Reg
+
     else if hh == 0x0A then
         Ok (SetI (address pair))
 

@@ -39,9 +39,9 @@ type Instruction
     | XorRegReg { from : Register, to : Register }
     | AddRegReg { from : Register, to : Register }
     | SubRegReg { from : Register, to : Register }
-    | ShiftRightRegReg { from : Register, to : Register }
+    | ShiftRightBy1Reg Register
     | SubReverseRegReg { from : Register, to : Register }
-    | ShiftLeftRegReg { from : Register, to : Register }
+    | ShiftLeftBy1Reg Register
     | DoIfEqReg Register Register
     | SetI Address
     | JumpPlusV0 Address
@@ -108,14 +108,14 @@ toString instruction =
         SubRegReg _ ->
             "SubRegReg"
 
-        ShiftRightRegReg _ ->
-            "ShiftRightRegReg"
+        ShiftRightBy1Reg _ ->
+            "ShiftRightBy1Reg"
 
         SubReverseRegReg _ ->
             "SubReverseRegReg"
 
-        ShiftLeftRegReg _ ->
-            "ShiftLeftRegReg"
+        ShiftLeftBy1Reg _ ->
+            "ShiftLeftBy1Reg"
 
         DoIfEqReg _ _ ->
             "DoIfEqReg"
@@ -223,14 +223,14 @@ arguments instruction =
         SubRegReg { from, to } ->
             fromTo from to
 
-        ShiftRightRegReg { from, to } ->
-            fromTo from to
+        ShiftRightBy1Reg reg ->
+            Registers.name reg
 
         SubReverseRegReg { from, to } ->
             fromTo from to
 
-        ShiftLeftRegReg { from, to } ->
-            fromTo from to
+        ShiftLeftBy1Reg reg ->
+            Registers.name reg
 
         DoIfEqReg reg1 reg2 ->
             twoRegs reg1 reg2

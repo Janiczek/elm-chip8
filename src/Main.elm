@@ -505,13 +505,13 @@ shouldIncrementPC instruction =
         SubRegReg _ ->
             True
 
-        ShiftRightRegReg _ ->
+        ShiftRightBy1Reg _ ->
             True
 
         SubReverseRegReg _ ->
             True
 
-        ShiftLeftRegReg _ ->
+        ShiftLeftBy1Reg _ ->
             True
 
         DoIfEqReg _ _ ->
@@ -656,7 +656,7 @@ runInstruction instruction model =
                     oldTo + from_
 
                 newTo =
-                    rawNewTo |> modBy 0xFF
+                    rawNewTo |> modBy 0x0100
 
                 newVF =
                     if rawNewTo > 0xFF then
@@ -675,14 +675,36 @@ runInstruction instruction model =
         SubRegReg { from, to } ->
             todo model
 
-        ShiftRightRegReg { from, to } ->
+        ShiftRightBy1Reg reg ->
             todo model
 
         SubReverseRegReg { from, to } ->
             todo model
 
-        ShiftLeftRegReg { from, to } ->
-            todo model
+        ShiftLeftBy1Reg reg ->
+            let
+                oldValue =
+                    Registers.get reg model.registers
+
+                newValue =
+                    oldValue
+                        |> Bitwise.shiftLeftBy 1
+                        |> modBy 0x0100
+
+                newVF =
+                    -- is MSB set?
+                    if oldValue > 0x7F then
+                        1
+
+                    else
+                        0
+            in
+            { model
+                | registers =
+                    model.registers
+                        |> Registers.set reg newValue
+                        |> Registers.set VF newVF
+            }
 
         DoIfEqReg reg1 reg2 ->
             todo model
@@ -796,7 +818,7 @@ runInstruction instruction model =
                 (Address i) =
                     model.i
             in
-            { model | i = Address ((i + Registers.get reg model.registers) |> modBy 0x0FFF) }
+            { model | i = Address ((i + Registers.get reg model.registers) |> modBy 0x1000) }
 
         SetIToFontAddr reg ->
             todo model
