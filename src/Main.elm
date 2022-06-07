@@ -58,7 +58,9 @@ type State
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { memory = Memory.init |> Memory.loadProgram ExamplePrograms.maze
+    ( { memory =
+            -- TODO allow loading different games than the Maze
+            Memory.init |> Memory.loadProgram ExamplePrograms.maze
       , pc = Address Memory.programStart
       , i = Address 0
       , registers = Registers.init
@@ -89,10 +91,8 @@ view model =
         , Memory.view model.pc model.memory
         , viewState model.state
         , viewButtons model.state
+        , viewRegisters model
 
-        --, viewRegisters model.registers
-        --, viewPc model.pc
-        --, viewI model.i
         --, viewInitialSeed model.randomSeed
         --, viewDisassembledCode code
         ]
@@ -132,6 +132,45 @@ viewButtons state =
         , Html.button
             [ Events.onClick ResetClicked ]
             [ Html.text "Reset" ]
+        ]
+
+
+viewRegisters : Model -> Html msg
+viewRegisters { pc, i, registers } =
+    let
+        viewRegister : { special : Bool } -> String -> Int -> Html msg
+        viewRegister { special } name value =
+            Html.li
+                [ Attrs.style "font-weight"
+                    (if special then
+                        "bold"
+
+                     else
+                        "normal"
+                    )
+                ]
+                [ Html.text <| name ++ ": " ++ Util.hex value ]
+
+        (Address pc_) =
+            pc
+
+        (Address i_) =
+            i
+    in
+    Html.div []
+        [ Html.h2 [] [ Html.text "Registers" ]
+        , Html.ul []
+            (viewRegister { special = True } "PC" pc_
+                :: viewRegister { special = True } "I" i_
+                :: List.map
+                    (\reg ->
+                        viewRegister
+                            { special = reg == VF }
+                            (Registers.name reg)
+                            (Registers.get reg registers)
+                    )
+                    Registers.all
+            )
         ]
 
 

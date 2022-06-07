@@ -1,9 +1,11 @@
 module Registers exposing
     ( Register(..)
     , Registers
+    , all
     , get
     , init
     , map
+    , name
     , register
     , set
     )
@@ -69,6 +71,11 @@ type Register
     | VD
     | VE
     | VF
+
+
+all : List Register
+all =
+    [ V0, V1, V2, V3, V4, V5, V6, V7, V8, V9, VA, VB, VC, VD, VE, VF ]
 
 
 set : Register -> Int -> Registers -> Registers
@@ -242,3 +249,55 @@ map reg fn registers =
             fn value
     in
     set reg newValue registers
+
+
+name : Register -> String
+name reg =
+    case reg of
+        V0 ->
+            "V0"
+
+        V1 ->
+            "V1"
+
+        V2 ->
+            "V2"
+
+        V3 ->
+            "V3"
+
+        V4 ->
+            "V4"
+
+        V5 ->
+            "V5"
+
+        V6 ->
+            "V6"
+
+        V7 ->
+            "V7"
+
+        V8 ->
+            "V8"
+
+        V9 ->
+            "V9"
+
+        VA ->
+            "VA"
+
+        VB ->
+            "VB"
+
+        VC ->
+            "VC"
+
+        VD ->
+            "VD"
+
+        VE ->
+            "VE"
+
+        VF ->
+            "VF"
