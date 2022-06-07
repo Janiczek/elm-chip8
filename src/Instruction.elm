@@ -2,6 +2,7 @@ module Instruction exposing
     ( Address(..)
     , Byte(..)
     , Instruction(..)
+    , arguments
     , toString
     )
 
@@ -163,3 +164,109 @@ toString instruction =
 
         LoadRegsUpTo _ ->
             "LoadRegsUpTo"
+
+
+arguments : Instruction -> String
+arguments instruction =
+    case instruction of
+        Clear ->
+            ""
+
+        Return ->
+            ""
+
+        Jump (Address addr) ->
+            Util.hex addr
+
+        Call (Address addr) ->
+            Util.hex addr
+
+        DoIfNeq reg (Byte byte) ->
+            Debug.toString reg ++ ", " ++ Util.hex byte
+
+        DoIfEq reg (Byte byte) ->
+            Debug.toString reg ++ ", " ++ Util.hex byte
+
+        DoIfNeqReg reg1 reg2 ->
+            Debug.toString ( reg1, reg2 )
+
+        SetRegConst reg (Byte byte) ->
+            Debug.toString reg ++ ", " ++ Util.hex byte
+
+        AddRegConst reg (Byte byte) ->
+            Debug.toString reg ++ ", " ++ Util.hex byte
+
+        SetRegReg { from, to } ->
+            Debug.toString ( from, to )
+
+        OrRegReg { from, to } ->
+            Debug.toString ( from, to )
+
+        AndRegReg { from, to } ->
+            Debug.toString ( from, to )
+
+        XorRegReg { from, to } ->
+            Debug.toString ( from, to )
+
+        AddRegReg { from, to } ->
+            Debug.toString ( from, to )
+
+        SubRegReg { from, to } ->
+            Debug.toString ( from, to )
+
+        ShiftRightRegReg { from, to } ->
+            Debug.toString ( from, to )
+
+        SubReverseRegReg { from, to } ->
+            Debug.toString ( from, to )
+
+        ShiftLeftRegReg { from, to } ->
+            Debug.toString ( from, to )
+
+        DoIfEqReg reg1 reg2 ->
+            Debug.toString ( reg1, reg2 )
+
+        SetI (Address addr) ->
+            Util.hex addr
+
+        JumpPlusV0 (Address addr) ->
+            Util.hex addr
+
+        SetRandomAnd reg (Byte byte) ->
+            Debug.toString reg ++ ", " ++ Util.hex byte
+
+        DrawSprite { vx, vy, height } ->
+            Debug.toString ( vx, vy, height )
+
+        DoIfKeyNotPressed reg ->
+            Debug.toString reg
+
+        DoIfKeyPressed reg ->
+            Debug.toString reg
+
+        GetDelayTimer reg ->
+            Debug.toString reg
+
+        SetPressedKey reg ->
+            Debug.toString reg
+
+        SetDelayTimer reg ->
+            Debug.toString reg
+
+        SetAudioTimer reg ->
+            Debug.toString reg
+
+        AddI reg ->
+            Debug.toString reg
+
+        SetIToFontAddr reg ->
+            Debug.toString reg
+
+        BcdDecode reg ->
+            Debug.toString reg
+
+        SaveRegsUpTo reg ->
+            Debug.toString reg
+
+        LoadRegsUpTo reg ->
+            Debug.toString reg

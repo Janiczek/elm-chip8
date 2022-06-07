@@ -89,18 +89,28 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "CHIP-8 Emulator"
     , body =
-        [ Display.view model.memory
-        , Memory.view
-            { pc = model.pc
-            , i = model.i
-            }
-            model.memory
-        , viewState model.state
-        , viewButtons model.state
-        , viewRegisters model
-        , viewDisassembledCode model
+        [ Html.div
+            [ Attrs.style "display" "flex"
+            , Attrs.style "flex-direction" "row"
+            , Attrs.style "gap" "8px"
+            ]
+            [ Html.div []
+                [ Display.view model.memory
+                , Memory.view
+                    { pc = model.pc
+                    , i = model.i
+                    }
+                    model.memory
+                , viewState model.state
+                , viewButtons model.state
+                ]
+            , Html.div []
+                [ viewRegisters model
 
-        -- TODO viewInitialSeed model.randomSeed
+                -- TODO viewInitialSeed model.randomSeed
+                , viewDisassembledCode model
+                ]
+            ]
         ]
     }
 
@@ -131,6 +141,9 @@ viewButtons state =
             ]
             [ Html.text "Run" ]
         , Html.button
+            [ Events.onClick StepClicked ]
+            [ Html.text "Step" ]
+        , Html.button
             [ Events.onClick PauseClicked
             , Attrs.disabled (not (isRunning state))
             ]
@@ -138,9 +151,6 @@ viewButtons state =
         , Html.button
             [ Events.onClick ResetClicked ]
             [ Html.text "Reset" ]
-        , Html.button
-            [ Events.onClick StepClicked ]
-            [ Html.text "Step" ]
         ]
 
 
@@ -210,14 +220,15 @@ viewDisassembledCode model =
         viewLine : ( Address, ( Byte, Byte ) ) -> Html msg
         viewLine ( Address addr, ( (Byte hi_) as hi, (Byte lo_) as lo ) ) =
             let
-                instruction : String
-                instruction =
+                ( instruction, arguments ) =
                     case Instruction.Parser.parse ( hi, lo ) of
                         Err _ ->
-                            ""
+                            ( "", "" )
 
                         Ok instr ->
-                            Instruction.toString instr
+                            ( Instruction.toString instr
+                            , Instruction.arguments instr
+                            )
             in
             Html.tr
                 [ Attrs.style "background-color"
@@ -231,6 +242,7 @@ viewDisassembledCode model =
                 [ Html.td [ cellPadding ] [ Html.text <| Util.hex addr ]
                 , Html.td [ cellPadding ] [ Html.text <| Util.hexBytePair ( hi_, lo_ ) ]
                 , Html.td [ cellPadding ] [ Html.text instruction ]
+                , Html.td [ cellPadding ] [ Html.text arguments ]
                 ]
 
         cellPadding =
@@ -248,6 +260,7 @@ viewDisassembledCode model =
                     [ Html.th [ cellPadding ] [ Html.text "Address" ]
                     , Html.th [ cellPadding ] [ Html.text "Opcode" ]
                     , Html.th [ cellPadding ] [ Html.text "Instruction" ]
+                    , Html.th [ cellPadding ] [ Html.text "Arguments" ]
                     ]
                 ]
             , Html.tbody []
