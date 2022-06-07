@@ -15,6 +15,7 @@ import Memory exposing (Memory)
 import Random exposing (Generator)
 import Registers exposing (Register(..), Registers)
 import Result.Extra as Result
+import Time
 import Util
 
 
@@ -38,6 +39,7 @@ type alias Model =
     , pc : Address
     , i : Address
     , registers : Registers
+    , delayTimer : Int
     , state : State
     , randomSeed : Random.Seed
     , initialSeed : Int
@@ -46,6 +48,7 @@ type alias Model =
 
 type Msg
     = Tick Float
+    | DelayTimerTick
     | RunClicked
     | PauseClicked
     | ResetClicked
@@ -70,6 +73,7 @@ init flags =
       , pc = Address Memory.programStart
       , i = Address 0
       , registers = Registers.init
+      , delayTimer = 0
       , state = Paused
       , randomSeed = Random.initialSeed flags.initialSeed
       , initialSeed = flags.initialSeed
@@ -85,6 +89,7 @@ loadROM rom model =
         , pc = Address Memory.programStart
         , i = Address 0
         , registers = Registers.init
+        , delayTimer = 0
         , state = Paused
         , randomSeed = Random.initialSeed model.initialSeed
     }
@@ -97,6 +102,7 @@ reset model =
         , pc = Address Memory.programStart
         , i = Address 0
         , registers = Registers.init
+        , delayTimer = 0
         , state = Paused
         , randomSeed = Random.initialSeed model.initialSeed
     }
@@ -184,7 +190,7 @@ viewButtons state =
 
 
 viewRegisters : Model -> Html msg
-viewRegisters { pc, i, registers } =
+viewRegisters { pc, i, delayTimer, registers } =
     let
         viewRegister : { special : Bool } -> String -> Int -> Html msg
         viewRegister { special } name value =
@@ -210,6 +216,7 @@ viewRegisters { pc, i, registers } =
         , Html.ul []
             (viewRegister { special = True } "PC" pc_
                 :: viewRegister { special = True } "I" i_
+                :: viewRegister { special = True } "Delay" delayTimer
                 :: List.map
                     (\reg ->
                         viewRegister
@@ -298,13 +305,25 @@ viewDisassembledCode model =
         ]
 
 
+sixtyHertz : Float
+sixtyHertz =
+    1000 / 60
+
+
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    if isRunning model.state then
-        Browser.Events.onAnimationFrameDelta Tick
+    Sub.batch
+        [ if isRunning model.state then
+            Browser.Events.onAnimationFrameDelta Tick
 
-    else
-        Sub.none
+          else
+            Sub.none
+        , if model.delayTimer > 0 then
+            Time.every sixtyHertz (\_ -> DelayTimerTick)
+
+          else
+            Sub.none
+        ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -313,6 +332,11 @@ update msg model =
         Tick msDelta ->
             ( model
                 |> stepTimes (min (round msDelta) 4)
+            , Cmd.none
+            )
+
+        DelayTimerTick ->
+            ( { model | delayTimer = model.delayTimer - 1 }
             , Cmd.none
             )
 
@@ -692,7 +716,7 @@ runInstruction instruction model =
             todo model
 
         SetDelayTimer reg ->
-            todo model
+            { model | delayTimer = Registers.get reg model.registers }
 
         SetAudioTimer reg ->
             todo model
