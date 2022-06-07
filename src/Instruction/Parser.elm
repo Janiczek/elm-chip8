@@ -116,5 +116,9 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
         registerLo hi
             |> Result.map (\reg -> SetDelayTimer reg)
 
+    else if hh == 0x0F && lo == 0x1E then
+        registerLo hi
+            |> Result.map (\reg -> AddI reg)
+
     else
         err

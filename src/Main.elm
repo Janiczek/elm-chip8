@@ -758,7 +758,11 @@ runInstruction instruction model =
             todo model
 
         AddI reg ->
-            todo model
+            let
+                (Address i) =
+                    model.i
+            in
+            { model | i = Address ((i + Registers.get reg model.registers) |> modBy 0x0FFF) }
 
         SetIToFontAddr reg ->
             todo model
