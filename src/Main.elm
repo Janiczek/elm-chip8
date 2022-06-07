@@ -124,8 +124,16 @@ step model =
             Ok instruction ->
                 model
                     |> runInstruction instruction
-                    -- TODO only increment in some cases (eg. not when jumping)
-                    |> incrementPC
+                    |> incrementPCIfNeeded instruction
+
+
+incrementPCIfNeeded : Instruction -> Model -> Model
+incrementPCIfNeeded instruction model =
+    if shouldIncrementPC instruction then
+        incrementPC model
+
+    else
+        model
 
 
 incrementPC : Model -> Model
@@ -135,6 +143,112 @@ incrementPC model =
             model.pc
     in
     { model | pc = Address (pc + 2) }
+
+
+shouldIncrementPC : Instruction -> Bool
+shouldIncrementPC instruction =
+    case instruction of
+        Clear ->
+            True
+
+        Return ->
+            False
+
+        Jump _ ->
+            False
+
+        Call _ ->
+            False
+
+        DoIfNeq _ _ ->
+            True
+
+        DoIfEq _ _ ->
+            True
+
+        DoIfNeqReg _ _ ->
+            True
+
+        SetRegConst _ _ ->
+            True
+
+        AddRegConst _ _ ->
+            True
+
+        SetRegReg _ ->
+            True
+
+        OrRegReg _ ->
+            True
+
+        AndRegReg _ ->
+            True
+
+        XorRegReg _ ->
+            True
+
+        AddRegReg _ ->
+            True
+
+        SubRegReg _ ->
+            True
+
+        ShiftRightRegReg _ ->
+            True
+
+        SubReverseRegReg _ ->
+            True
+
+        ShiftLeftRegReg _ ->
+            True
+
+        DoIfEqReg _ _ ->
+            True
+
+        SetI _ ->
+            True
+
+        JumpPlusV0 _ ->
+            False
+
+        SetRandomAnd _ _ ->
+            True
+
+        DrawSprite _ ->
+            True
+
+        DoIfKeyNotPressed _ ->
+            True
+
+        DoIfKeyPressed _ ->
+            True
+
+        GetDelayTimer _ ->
+            True
+
+        SetPressedKey _ ->
+            True
+
+        SetDelayTimer _ ->
+            True
+
+        SetAudioTimer _ ->
+            True
+
+        AddI _ ->
+            True
+
+        SetIToFontAddr _ ->
+            True
+
+        BcdDecode _ ->
+            True
+
+        SaveRegsUpTo _ ->
+            True
+
+        LoadRegsUpTo _ ->
+            True
 
 
 runInstruction : Instruction -> Model -> Model
@@ -152,7 +266,7 @@ runInstruction instruction model =
             todo model
 
         Jump addr ->
-            todo model
+            { model | pc = addr }
 
         Call addr ->
             todo model
