@@ -5,7 +5,7 @@ import Browser
 import Browser.Events
 import Display
 import Error exposing (Error(..))
-import ExamplePrograms
+import ExamplePrograms exposing (ProgramROM(..))
 import Html exposing (Html)
 import Html.Attributes as Attrs
 import Html.Events as Events
@@ -50,6 +50,7 @@ type Msg
     | PauseClicked
     | ResetClicked
     | StepClicked
+    | ProgramSelected ProgramROM
 
 
 type State
@@ -60,9 +61,7 @@ type State
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { memory =
-            -- TODO allow loading different games than the Maze
-            Memory.init |> Memory.loadProgram ExamplePrograms.maze
+    ( { memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program Maze)
       , pc = Address Memory.programStart
       , i = Address 0
       , registers = Registers.init
@@ -74,14 +73,27 @@ init flags =
     )
 
 
-reset : Model -> Model
-reset model =
+loadROM : ProgramROM -> Model -> Model
+loadROM rom model =
     { model
-        | memory = Memory.init |> Memory.loadProgram ExamplePrograms.maze
+        | memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program rom)
         , pc = Address Memory.programStart
         , i = Address 0
         , registers = Registers.init
         , state = Paused
+        , randomSeed = Random.initialSeed model.initialSeed
+    }
+
+
+reset : Model -> Model
+reset model =
+    { model
+        | memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program Maze)
+        , pc = Address Memory.programStart
+        , i = Address 0
+        , registers = Registers.init
+        , state = Paused
+        , randomSeed = Random.initialSeed model.initialSeed
     }
 
 
@@ -133,24 +145,36 @@ viewState state =
 
 viewButtons : State -> Html Msg
 viewButtons state =
-    Html.div
-        []
-        [ Html.button
-            [ Events.onClick RunClicked
-            , Attrs.disabled (isRunning state)
+    Html.div []
+        [ Html.div
+            []
+            [ Html.button
+                [ Events.onClick RunClicked
+                , Attrs.disabled (isRunning state)
+                ]
+                [ Html.text "Run" ]
+            , Html.button
+                [ Events.onClick StepClicked ]
+                [ Html.text "Step" ]
+            , Html.button
+                [ Events.onClick PauseClicked
+                , Attrs.disabled (not (isRunning state))
+                ]
+                [ Html.text "Pause" ]
+            , Html.button
+                [ Events.onClick ResetClicked ]
+                [ Html.text "Reset" ]
             ]
-            [ Html.text "Run" ]
-        , Html.button
-            [ Events.onClick StepClicked ]
-            [ Html.text "Step" ]
-        , Html.button
-            [ Events.onClick PauseClicked
-            , Attrs.disabled (not (isRunning state))
-            ]
-            [ Html.text "Pause" ]
-        , Html.button
-            [ Events.onClick ResetClicked ]
-            [ Html.text "Reset" ]
+        , Html.h4 [] [ Html.text "Load a ROM:" ]
+        , Html.div []
+            (List.map
+                (\program ->
+                    Html.button
+                        [ Events.onClick (ProgramSelected program) ]
+                        [ Html.text <| ExamplePrograms.name program ]
+                )
+                ExamplePrograms.all
+            )
         ]
 
 
@@ -304,6 +328,11 @@ update msg model =
 
         StepClicked ->
             ( step model
+            , Cmd.none
+            )
+
+        ProgramSelected program ->
+            ( loadROM program model
             , Cmd.none
             )
 
