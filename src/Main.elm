@@ -1,22 +1,35 @@
 module Main exposing (main)
 
 import Bitwise
+import Browser
+import Browser.Events
 import Display
 import Error exposing (Error(..))
 import ExamplePrograms
+import Html exposing (Html)
+import Html.Attributes as Attrs
+import Html.Events as Events
 import Instruction exposing (Address(..), Byte(..), Instruction(..))
-import List.Cartesian
 import Memory exposing (Memory)
-import Playground as P
 import Random exposing (Generator)
 import Registers exposing (Register(..), Registers)
 import Result.Extra as Result
 import Util
 
 
-main : Program () (P.Playground Model) P.Msg
+main : Program Flags Model Msg
 main =
-    P.game view update init
+    Browser.document
+        { init = init
+        , update = update
+        , subscriptions = subscriptions
+        , view = view
+        }
+
+
+type alias Flags =
+    { initialSeed : Int
+    }
 
 
 type alias Model =
@@ -26,7 +39,15 @@ type alias Model =
     , registers : Registers
     , state : State
     , randomSeed : Random.Seed
+    , initialSeed : Int
     }
+
+
+type Msg
+    = Tick Float
+    | RunClicked
+    | PauseClicked
+    | ResetClicked
 
 
 type State
@@ -35,69 +56,138 @@ type State
     | Halted Error
 
 
-init : Model
-init =
-    { memory = Memory.init |> Memory.loadProgram ExamplePrograms.maze
-    , pc = Address Memory.programStart
-    , i = Address 0
-    , registers = Registers.init
-    , state = Running
-    , randomSeed =
-        -- TODO when we ditch the Playground package, wire in a random seed from JS flags
-        Random.initialSeed 0
+init : Flags -> ( Model, Cmd Msg )
+init flags =
+    ( { memory = Memory.init |> Memory.loadProgram ExamplePrograms.maze
+      , pc = Address Memory.programStart
+      , i = Address 0
+      , registers = Registers.init
+      , state = Paused
+      , randomSeed = Random.initialSeed flags.initialSeed
+      , initialSeed = flags.initialSeed
+      }
+    , Cmd.none
+    )
+
+
+reset : Model -> Model
+reset model =
+    { model
+        | memory = Memory.init |> Memory.loadProgram ExamplePrograms.maze
+        , pc = Address Memory.programStart
+        , i = Address 0
+        , registers = Registers.init
+        , state = Paused
     }
 
 
-view : P.Computer -> Model -> List P.Shape
-view computer model =
-    [ Display.view model.memory
-    , Memory.view model.pc model.memory
+view : Model -> Browser.Document Msg
+view model =
+    { title = "CHIP-8 Emulator"
+    , body =
+        [ Display.view model.memory
+        , Memory.view model.pc model.memory
+        , viewState model.state
+        , viewButtons model.state
 
-    -- TODO show the registers
-    -- TODO show pc
-    -- TODO show i
-    -- TODO show random seed
-    -- TODO show disassembled code
-    , case model.state of
-        Running ->
-            []
+        --, viewRegisters model.registers
+        --, viewPc model.pc
+        --, viewI model.i
+        --, viewInitialSeed model.randomSeed
+        --, viewDisassembledCode code
+        ]
+    }
 
-        Paused ->
-            [ P.words P.orange "Paused" ]
 
-        Halted err ->
-            [ P.words P.red (Error.toString err)
-                |> P.moveDown 96
+viewState : State -> Html msg
+viewState state =
+    Html.div []
+        [ Html.h2 [] [ Html.text "State" ]
+        , case state of
+            Running ->
+                Html.text "Running"
+
+            Paused ->
+                Html.text "Paused"
+
+            Halted err ->
+                Html.text <| "Halted: " ++ Error.toString err
+        ]
+
+
+viewButtons : State -> Html Msg
+viewButtons state =
+    Html.div
+        []
+        [ Html.button
+            [ Events.onClick RunClicked
+            , Attrs.disabled (isRunning state)
             ]
-    ]
-        |> List.concat
+            [ Html.text "Run" ]
+        , Html.button
+            [ Events.onClick PauseClicked
+            , Attrs.disabled (not (isRunning state))
+            ]
+            [ Html.text "Pause" ]
+        , Html.button
+            [ Events.onClick ResetClicked ]
+            [ Html.text "Reset" ]
+        ]
 
 
-update : P.Computer -> Model -> Model
-update computer model =
-    model
-        |> stepTimes (min computer.time.delta 4)
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    if isRunning model.state then
+        Browser.Events.onAnimationFrameDelta Tick
+
+    else
+        Sub.none
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        Tick msDelta ->
+            ( model
+                |> stepTimes (min (round msDelta) 4)
+            , Cmd.none
+            )
+
+        RunClicked ->
+            ( { model | state = Running }
+            , Cmd.none
+            )
+
+        PauseClicked ->
+            ( { model | state = Paused }
+            , Cmd.none
+            )
+
+        ResetClicked ->
+            ( reset model
+            , Cmd.none
+            )
 
 
 stepTimes : Int -> Model -> Model
 stepTimes n model =
-    if isHalted model.state then
-        model
-
-    else
+    if isRunning model.state then
         doNTimes n step model
 
+    else
+        model
 
-isHalted : State -> Bool
-isHalted state =
+
+isRunning : State -> Bool
+isRunning state =
     case state of
-        Halted _ ->
+        Running ->
             True
 
         Paused ->
             False
 
-        Running ->
+        Halted _ ->
             False
 
 
@@ -112,10 +202,7 @@ doNTimes n fn value =
 
 step : Model -> Model
 step model =
-    if isHalted model.state then
-        model
-
-    else
+    if isRunning model.state then
         case Memory.getInstruction model.pc model.memory of
             Err err ->
                 { model | state = Halted err }
@@ -124,6 +211,9 @@ step model =
                 model
                     |> runInstruction instruction
                     |> incrementPCIfNeeded instruction
+
+    else
+        model
 
 
 incrementPCIfNeeded : Instruction -> Model -> Model

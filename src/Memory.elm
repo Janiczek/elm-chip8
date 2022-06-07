@@ -16,10 +16,11 @@ module Memory exposing
 import Array exposing (Array)
 import Bitwise
 import Error exposing (Error(..))
+import Html exposing (Html)
+import Html.Attributes as Attrs
 import Instruction exposing (Address(..), Byte(..), Instruction)
 import Instruction.Parser
 import List.Extra as List
-import Playground as P
 import RadixInt
 import Set exposing (Set)
 import Util
@@ -216,33 +217,46 @@ displayedWidth =
     64
 
 
-view : Address -> Memory -> List P.Shape
+displayedHeight : Int
+displayedHeight =
+    size // displayedWidth
+
+
+view : Address -> Memory -> Html msg
 view (Address pc) memory =
-    memory
-        |> toList
-        |> List.indexedMap
-            (\i byte ->
-                let
-                    x : Int
-                    x =
-                        i |> modBy displayedWidth
+    Html.div []
+        [ Html.h2 [] [ Html.text "Memory" ]
+        , Html.div
+            [ Attrs.style "position" "relative"
+            , Attrs.style "width" (Util.px displayedWidth)
+            , Attrs.style "height" (Util.px displayedHeight)
+            ]
+            (memory
+                |> toList
+                |> List.indexedMap
+                    (\i byte ->
+                        let
+                            x : Int
+                            x =
+                                i |> modBy displayedWidth
 
-                    y : Int
-                    y =
-                        i // displayedWidth
+                            y : Int
+                            y =
+                                i // displayedWidth
 
-                    b : Float
-                    b =
-                        toFloat byte
+                            b : String
+                            b =
+                                String.fromInt byte
 
-                    color : P.Color
-                    color =
-                        if pc == i then
-                            P.red
+                            color : String
+                            color =
+                                if pc == i then
+                                    "red"
 
-                        else
-                            P.rgb b b b
-                in
-                Util.viewPixel color x y
-                    |> P.move (Util.px (Util.screenWidth + 8)) (Util.px 32)
+                                else
+                                    "rgb(" ++ b ++ "," ++ b ++ "," ++ b ++ ")"
+                        in
+                        Util.viewPixel color x y
+                    )
             )
+        ]

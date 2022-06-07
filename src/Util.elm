@@ -4,41 +4,48 @@ module Util exposing
     , hex
     , hexBytePair
     , px
-    , screenHeightScaled
+    , screenHeightScaledStringPx
     , screenWidth
-    , screenWidthScaled
+    , screenWidthScaledStringPx
     , toBitList
     , viewPixel
     , white
     )
 
 import Bitwise
+import Html exposing (Html)
+import Html.Attributes as Attrs
 import ParseInt
-import Playground as P
 import RadixInt
 
 
-viewPixel : P.Color -> Int -> Int -> P.Shape
+viewPixel : String -> Int -> Int -> Html msg
 viewPixel color x y =
-    P.square color screenScaleFloat
-        |> P.move -(screenWidthScaled / 2) (screenHeightScaled / 2)
-        |> P.move (screenScaleFloat / 2) -(screenScaleFloat / 2)
-        |> P.move (px x) -(px y)
+    Html.div
+        [ Attrs.style "background-color" color
+        , Attrs.style "width" screenScaleStringPx
+        , Attrs.style "height" screenScaleStringPx
+        , Attrs.style "transform" ("translate(" ++ px x ++ "," ++ px y ++ ")")
+        , Attrs.style "position" "absolute"
+        , Attrs.style "left" "0"
+        , Attrs.style "top" "0"
+        ]
+        []
 
 
-white : P.Color
+white : String
 white =
-    P.rgb 253 246 227
+    "rgb(253,246,227)"
 
 
-black : P.Color
+black : String
 black =
-    P.rgb 101 123 131
+    "rgb(101,123,131)"
 
 
-px : Int -> Float
+px : Int -> String
 px n =
-    toFloat (n * screenScale)
+    String.fromInt (n * screenScale) ++ "px"
 
 
 screenScale : Int
@@ -46,9 +53,9 @@ screenScale =
     4
 
 
-screenScaleFloat : Float
-screenScaleFloat =
-    toFloat screenScale
+screenScaleStringPx : String
+screenScaleStringPx =
+    String.fromInt screenScale ++ "px"
 
 
 screenWidth : Int
@@ -61,14 +68,14 @@ screenHeight =
     32
 
 
-screenWidthScaled : Float
-screenWidthScaled =
-    toFloat (screenWidth * screenScale)
+screenWidthScaledStringPx : String
+screenWidthScaledStringPx =
+    String.fromInt (screenWidth * screenScale) ++ "px"
 
 
-screenHeightScaled : Float
-screenHeightScaled =
-    toFloat (screenHeight * screenScale)
+screenHeightScaledStringPx : String
+screenHeightScaledStringPx =
+    String.fromInt (screenHeight * screenScale) ++ "px"
 
 
 hex : Int -> String

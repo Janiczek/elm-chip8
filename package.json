@@ -1,8 +1,0 @@
-{
-  "scripts": {
-    "watch": "elm-live src/Main.elm"
-  },
-  "devDependencies": {
-    "elm-live": "^4.0.2"
-  }
-}
