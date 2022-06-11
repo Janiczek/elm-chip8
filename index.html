@@ -5,6 +5,9 @@
         <script src="elm.js"></script>
     </head>
     <body>
-        <script>const app = Elm.Main.init({flags: {initialSeed: +new Date()}});</script>
+        <script>
+            const seed = crypto.getRandomValues(new Uint32Array(1))[0];
+            const app = Elm.Main.init({flags: {initialSeed: seed}});
+        </script>
     </body>
 </html>
