@@ -154,8 +154,8 @@ code instruction =
         GetDelayTimer reg ->
             setReg reg "delay_t"
 
-        SetPressedKey _ ->
-            "TODO"
+        SetPressedKey reg ->
+            setReg reg "pressed_key()"
 
         SetDelayTimer reg ->
             "delay_t = " ++ Registers.name reg

@@ -66,6 +66,7 @@ type State
     = Running
     | Paused
     | Halted Error
+    | WaitingForKey Register
 
 
 type alias Computer =
@@ -204,6 +205,9 @@ viewState state =
 
             Halted err ->
                 Html.text <| "Halted: " ++ Error.toString err
+
+            WaitingForKey reg ->
+                Html.text <| "Waiting for key on register " ++ Registers.name reg
         ]
 
 
@@ -218,7 +222,7 @@ viewButtons computer =
         [ Html.div []
             [ Html.button
                 [ Events.onClick RunClicked
-                , Attrs.disabled (isRunning currentState)
+                , Attrs.disabled (isRunning currentState || isWaitingForKey currentState)
                 ]
                 [ Html.text "Run" ]
             , Html.button
@@ -226,7 +230,7 @@ viewButtons computer =
                 [ Html.text "Step" ]
             , Html.button
                 [ Events.onClick PauseClicked
-                , Attrs.disabled (not (isRunning currentState))
+                , Attrs.disabled (not (isRunning currentState || isWaitingForKey currentState))
                 ]
                 [ Html.text "Pause" ]
             , Html.button
@@ -239,12 +243,12 @@ viewButtons computer =
         , Html.div []
             [ Html.button
                 [ Events.onClick PreviousStateClicked
-                , Attrs.disabled (isRunning currentState || Zipper.isFirst computer)
+                , Attrs.disabled (isRunning currentState || isWaitingForKey currentState || Zipper.isFirst computer)
                 ]
                 [ Html.text "← Previous" ]
             , Html.button
                 [ Events.onClick NextStateClicked
-                , Attrs.disabled (isRunning currentState || Zipper.isLast computer)
+                , Attrs.disabled (isRunning currentState || isWaitingForKey currentState || Zipper.isLast computer)
                 ]
                 [ Html.text "Next →" ]
             ]
@@ -620,7 +624,31 @@ update msg model =
             )
 
         KeyDown n ->
-            ( { model | pressedKeys = Set.insert n model.pressedKeys }
+            let
+                modelWithKey : Model
+                modelWithKey =
+                    { model | pressedKeys = Set.insert n model.pressedKeys }
+
+                computer : Computer
+                computer =
+                    Zipper.current model.computer
+            in
+            ( case computer.state of
+                WaitingForKey reg ->
+                    { modelWithKey
+                        | computer =
+                            modelWithKey.computer
+                                |> stepComputer (setPressedKey reg n)
+                    }
+
+                Running ->
+                    modelWithKey
+
+                Halted _ ->
+                    modelWithKey
+
+                Paused ->
+                    modelWithKey
             , Cmd.none
             )
 
@@ -632,7 +660,7 @@ update msg model =
 
 pauseIfRunning : Computer -> Computer
 pauseIfRunning computer =
-    if isRunning computer.state then
+    if isRunning computer.state || isWaitingForKey computer.state then
         { computer | state = Paused }
 
     else
@@ -664,6 +692,25 @@ isRunning state =
         Halted _ ->
             False
 
+        WaitingForKey _ ->
+            False
+
+
+isWaitingForKey : State -> Bool
+isWaitingForKey state =
+    case state of
+        Running ->
+            False
+
+        Paused ->
+            False
+
+        Halted _ ->
+            False
+
+        WaitingForKey _ ->
+            True
+
 
 doNTimes : Int -> (a -> a) -> a -> a
 doNTimes n fn value =
@@ -687,8 +734,8 @@ stepIfRunning pressedKeys computer =
         computer
 
 
-step : Set Int -> Zipper Computer -> Zipper Computer
-step pressedKeys computer =
+stepComputer : (Computer -> Computer) -> Zipper Computer -> Zipper Computer
+stepComputer fn computer =
     let
         currentComputer : Computer
         currentComputer =
@@ -696,18 +743,7 @@ step pressedKeys computer =
 
         newComputer : Computer
         newComputer =
-            case Memory.getInstruction currentComputer.pc currentComputer.memory of
-                Err err ->
-                    { currentComputer | state = Halted err }
-
-                Ok instruction ->
-                    if instruction == Jump currentComputer.pc then
-                        { currentComputer | state = Halted (InfiniteLoop currentComputer.pc) }
-
-                    else
-                        currentComputer
-                            |> runInstruction pressedKeys instruction
-                            |> incrementPCIfNeeded instruction
+            fn currentComputer
     in
     computer
         |> Zipper.mapAfter (\future -> newComputer :: future)
@@ -723,9 +759,28 @@ step pressedKeys computer =
             )
 
 
+step : Set Int -> Zipper Computer -> Zipper Computer
+step pressedKeys =
+    stepComputer
+        (\currentComputer ->
+            case Memory.getInstruction currentComputer.pc currentComputer.memory of
+                Err err ->
+                    { currentComputer | state = Halted err }
+
+                Ok instruction ->
+                    if instruction == Jump currentComputer.pc then
+                        { currentComputer | state = Halted (InfiniteLoop currentComputer.pc) }
+
+                    else
+                        currentComputer
+                            |> runInstruction pressedKeys instruction
+                            |> incrementPCIfNeeded instruction
+        )
+
+
 incrementPCIfNeeded : Instruction -> Computer -> Computer
 incrementPCIfNeeded instruction computer =
-    if shouldIncrementPC instruction then
+    if shouldIncrementPC instruction && (isRunning computer.state || computer.state == Paused) then
         incrementPC computer
 
     else
@@ -1193,8 +1248,13 @@ runInstruction pressedKeys instruction computer =
         GetDelayTimer reg ->
             { computer | registers = Registers.set reg computer.delayTimer computer.registers }
 
-        SetPressedKey _ ->
-            todo instruction computer
+        SetPressedKey reg ->
+            case Set.toList pressedKeys of
+                [] ->
+                    { computer | state = WaitingForKey reg }
+
+                key :: rest ->
+                    setPressedKey reg key computer
 
         SetDelayTimer reg ->
             { computer | delayTimer = Registers.get reg computer.registers }
@@ -1322,6 +1382,14 @@ runInstruction pressedKeys instruction computer =
 
         MagicFn _ ->
             todo instruction computer
+
+
+setPressedKey : Register -> Int -> Computer -> Computer
+setPressedKey reg key computer =
+    { computer
+        | registers = Registers.set reg key computer.registers
+        , state = Running
+    }
 
 
 byteGenerator : Generator Int

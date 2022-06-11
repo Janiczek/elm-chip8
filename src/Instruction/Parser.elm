@@ -177,6 +177,10 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
         registerLo hi
             |> Result.map (\reg -> GetDelayTimer reg)
 
+    else if hh == 0x0F && lo == 0x0A then
+        registerLo hi
+            |> Result.map (\reg -> SetPressedKey reg)
+
     else if hh == 0x0F && lo == 0x15 then
         registerLo hi
             |> Result.map (\reg -> SetDelayTimer reg)
