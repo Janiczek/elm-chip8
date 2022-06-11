@@ -11,7 +11,9 @@ import Html.Attributes as Attrs
 import Html.Events as Events
 import Instruction exposing (Address(..), Byte(..), Instruction(..))
 import Instruction.Parser
+import List.Extra as List
 import Memory exposing (Memory)
+import RadixInt
 import Random exposing (Generator)
 import Registers exposing (Register(..), Registers)
 import Result.Extra as Result
@@ -183,13 +185,20 @@ viewButtons state =
             ]
         , Html.h4 [] [ Html.text "Load a ROM:" ]
         , Html.div []
-            (List.map
-                (\program ->
-                    Html.button
-                        [ Events.onClick (ProgramSelected program) ]
-                        [ Html.text <| ExamplePrograms.name program ]
-                )
-                ExamplePrograms.all
+            (ExamplePrograms.all
+                |> List.greedyGroupsOf 5
+                |> List.map
+                    (\programs ->
+                        Html.div []
+                            (List.map
+                                (\program ->
+                                    Html.button
+                                        [ Events.onClick (ProgramSelected program) ]
+                                        [ Html.text <| ExamplePrograms.name program ]
+                                )
+                                programs
+                            )
+                    )
             )
         ]
 
@@ -916,11 +925,58 @@ runInstruction instruction model =
             in
             { model | i = Address ((i + Registers.get reg model.registers) |> modBy 0x1000) }
 
-        SetIToFontAddr _ ->
-            todo model
+        SetIToFontAddr reg ->
+            let
+                hexDigit : Int
+                hexDigit =
+                    Registers.get reg model.registers
+                        |> modBy 0x10
 
-        BcdDecode _ ->
-            todo model
+                address : Address
+                address =
+                    Address (hexDigit * 5)
+            in
+            { model | i = address }
+
+        BcdDecode reg ->
+            let
+                value : Int
+                value =
+                    Registers.get reg model.registers
+
+                decimalDigits : List Int
+                decimalDigits =
+                    value
+                        |> RadixInt.fromInt (RadixInt.Base 10)
+                        |> RadixInt.toList
+                        |> List.reverse
+                        |> Util.zeroPadLeft 3
+
+                (Address i) =
+                    model.i
+
+                addressesAndDigits : List ( Int, Int )
+                addressesAndDigits =
+                    List.map2 Tuple.pair
+                        (List.range i (i + 2))
+                        decimalDigits
+
+                savedToMemory : Result Error Memory
+                savedToMemory =
+                    List.foldl
+                        (\( addr, digit ) accMemory ->
+                            accMemory
+                                |> Result.andThen (\mem -> Memory.set (Address addr) digit mem)
+                        )
+                        (Ok model.memory)
+                        addressesAndDigits
+            in
+            case savedToMemory of
+                Err err ->
+                    { model | state = Halted err }
+
+                Ok newMemory ->
+                    { model | memory = newMemory }
 
         SaveRegsUpTo reg ->
             let

@@ -10,6 +10,7 @@ module Util exposing
     , toBitList
     , viewPixel
     , white
+    , zeroPadLeft
     )
 
 import Bitwise
