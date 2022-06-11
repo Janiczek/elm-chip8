@@ -6,7 +6,6 @@ module Instruction exposing
     , toString
     )
 
-import Bitwise
 import Registers exposing (Register)
 import Util
 

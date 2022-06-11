@@ -111,6 +111,9 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
     else if hh == 0x08 && ll == 0x00 then
         regReg SetRegReg
 
+    else if hh == 0x08 && ll == 0x01 then
+        regReg OrRegReg
+
     else if hh == 0x08 && ll == 0x02 then
         regReg AndRegReg
 
@@ -126,6 +129,9 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
     else if hh == 0x08 && ll == 0x06 then
         regReg ShiftRightBy1
 
+    else if hh == 0x08 && ll == 0x07 then
+        regReg SubReverseRegReg
+
     else if hh == 0x08 && ll == 0x0E then
         regReg ShiftLeftBy1
 
@@ -136,6 +142,9 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
 
     else if hh == 0x0A then
         Ok (SetI (address pair))
+
+    else if hh == 0x0B then
+        Ok (JumpPlusV0 (address pair))
 
     else if hh == 0x0C then
         registerLo hi

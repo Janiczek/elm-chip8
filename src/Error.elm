@@ -1,6 +1,6 @@
 module Error exposing (Error(..), toString)
 
-import Instruction exposing (Address(..), Instruction(..))
+import Instruction exposing (Address(..), Instruction)
 import Util
 
 

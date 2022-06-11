@@ -1,4 +1,4 @@
-module Main exposing (main)
+module Main exposing (Flags, Model, Msg, State, main)
 
 import Bitwise
 import Browser
@@ -262,9 +262,11 @@ viewDisassembledCode model =
                 |> List.filterMap
                     (\delta ->
                         let
+                            address1 : Address
                             address1 =
                                 Address (pc + 2 * delta)
 
+                            address2 : Address
                             address2 =
                                 Address (pc + 2 * delta + 1)
                         in
@@ -302,6 +304,7 @@ viewDisassembledCode model =
                 , Html.td [ cellPadding ] [ Html.text arguments ]
                 ]
 
+        cellPadding : Html.Attribute msg
         cellPadding =
             Attrs.style "padding" "0 4px"
     in
@@ -635,7 +638,12 @@ runInstruction instruction model =
             { model | registers = Registers.set to (Registers.get from model.registers) model.registers }
 
         OrRegReg { from, to } ->
-            todo model
+            { model
+                | registers =
+                    Registers.map to
+                        (\oldTo -> Bitwise.or oldTo (Registers.get from model.registers))
+                        model.registers
+            }
 
         AndRegReg { from, to } ->
             { model
@@ -655,12 +663,15 @@ runInstruction instruction model =
 
         AddRegReg { from, to } ->
             let
+                oldTo : Int
                 oldTo =
                     Registers.get to model.registers
 
+                from_ : Int
                 from_ =
                     Registers.get from model.registers
 
+                rawNewTo : Int
                 rawNewTo =
                     oldTo + from_
 
@@ -680,12 +691,15 @@ runInstruction instruction model =
 
         SubRegReg { from, to } ->
             let
+                oldTo : Int
                 oldTo =
                     Registers.get to model.registers
 
+                from_ : Int
                 from_ =
                     Registers.get from model.registers
 
+                rawNewTo : Int
                 rawNewTo =
                     oldTo - from_
 
@@ -705,13 +719,16 @@ runInstruction instruction model =
 
         ShiftRightBy1 { from, to } ->
             let
+                from_ : Int
                 from_ =
                     Registers.get from model.registers
 
+                newValue : Int
                 newValue =
                     from_
                         |> Bitwise.shiftRightZfBy 1
 
+                newVF : Int
                 newVF =
                     Bitwise.and 0x01 from_
             in
@@ -723,18 +740,46 @@ runInstruction instruction model =
             }
 
         SubReverseRegReg { from, to } ->
-            todo model
-
-        ShiftLeftBy1 { from, to } ->
             let
+                oldTo : Int
+                oldTo =
+                    Registers.get to model.registers
+
+                from_ : Int
                 from_ =
                     Registers.get from model.registers
 
+                rawNewTo : Int
+                rawNewTo =
+                    from_ - oldTo
+
+                ( newTo, newVF ) =
+                    if rawNewTo < 0 then
+                        ( rawNewTo + 0x0100, 0 )
+
+                    else
+                        ( rawNewTo, 1 )
+            in
+            { model
+                | registers =
+                    model.registers
+                        |> Registers.set to newTo
+                        |> Registers.set VF newVF
+            }
+
+        ShiftLeftBy1 { from, to } ->
+            let
+                from_ : Int
+                from_ =
+                    Registers.get from model.registers
+
+                newValue : Int
                 newValue =
                     from_
                         |> Bitwise.shiftLeftBy 1
                         |> modBy 0x0100
 
+                newVF : Int
                 newVF =
                     if from_ > 0x7F then
                         1
@@ -759,8 +804,12 @@ runInstruction instruction model =
         SetI addr ->
             { model | i = addr }
 
-        JumpPlusV0 addr ->
-            todo model
+        JumpPlusV0 (Address addr) ->
+            {- TODO is this supposed to wrap around? ie. addr 0xFFF + (v0 = 0x05)
+               -> should it crash out of bounds?
+               -> or should it wrap around to something like 0x004
+            -}
+            { model | pc = Address (addr + Registers.get V0 model.registers) }
 
         SetRandomAnd register (Byte mask) ->
             let
@@ -842,22 +891,22 @@ runInstruction instruction model =
                         , registers = Registers.set VF newVF model.registers
                     }
 
-        DoIfKeyNotPressed reg ->
+        DoIfKeyNotPressed _ ->
             todo model
 
-        DoIfKeyPressed reg ->
+        DoIfKeyPressed _ ->
             todo model
 
         GetDelayTimer reg ->
             { model | registers = Registers.set reg model.delayTimer model.registers }
 
-        SetPressedKey reg ->
+        SetPressedKey _ ->
             todo model
 
         SetDelayTimer reg ->
             { model | delayTimer = Registers.get reg model.registers }
 
-        SetAudioTimer reg ->
+        SetAudioTimer _ ->
             todo model
 
         AddI reg ->
@@ -867,10 +916,10 @@ runInstruction instruction model =
             in
             { model | i = Address ((i + Registers.get reg model.registers) |> modBy 0x1000) }
 
-        SetIToFontAddr reg ->
+        SetIToFontAddr _ ->
             todo model
 
-        BcdDecode reg ->
+        BcdDecode _ ->
             todo model
 
         SaveRegsUpTo reg ->
@@ -878,10 +927,6 @@ runInstruction instruction model =
                 regs : List Register
                 regs =
                     Registers.upTo reg
-
-                n : Int
-                n =
-                    Registers.index reg
 
                 (Address i) =
                     model.i
@@ -910,10 +955,6 @@ runInstruction instruction model =
 
         LoadRegsUpTo reg ->
             let
-                regs : List Register
-                regs =
-                    Registers.upTo reg
-
                 n : Int
                 n =
                     Registers.index reg
@@ -936,7 +977,7 @@ runInstruction instruction model =
                             List.foldl
                                 (\( reg_, Byte byte ) accRegisters -> Registers.set reg_ byte accRegisters)
                                 model.registers
-                                (List.map2 Tuple.pair regs bytes)
+                                (List.map2 Tuple.pair (Registers.upTo reg) bytes)
                     }
 
 

@@ -1,7 +1,6 @@
 module Memory exposing
     ( Memory
     , clearDisplay
-    , displayStart
     , get
     , getDisplayActivePixels
     , getInstruction
@@ -9,8 +8,6 @@ module Memory exposing
     , loadProgram
     , programStart
     , set
-    , size
-    , toList
     , view
     , xorDisplayBit
     )
@@ -23,8 +20,6 @@ import Html.Attributes as Attrs
 import Instruction exposing (Address(..), Byte(..), Instruction)
 import Instruction.Parser
 import List.Extra as List
-import RadixInt
-import Set exposing (Set)
 import Util
 
 
@@ -50,11 +45,6 @@ programEnd =
 displayStart : Int
 displayStart =
     0x0F00
-
-
-displaySizeBytes : Int
-displaySizeBytes =
-    0x0100
 
 
 init : Memory
@@ -96,7 +86,7 @@ set ((Address rawAddr) as addr) value memory =
 
 
 setUnsafe : Address -> Int -> Memory -> Result Error Memory
-setUnsafe ((Address rawAddr) as addr) value (Memory memory) =
+setUnsafe (Address rawAddr) value (Memory memory) =
     memory
         |> Array.set rawAddr value
         |> Memory
@@ -138,10 +128,6 @@ xorDisplayBit ( x, y ) xorBit memory =
         bytePosition =
             bitPosition // 8
 
-        bitIndexInsideByte : Int
-        bitIndexInsideByte =
-            bitPosition |> modBy 8
-
         addr : Address
         addr =
             Address (displayStart + bytePosition)
@@ -150,6 +136,10 @@ xorDisplayBit ( x, y ) xorBit memory =
         |> Result.andThen
             (\(Byte byte) ->
                 let
+                    bitIndexInsideByte : Int
+                    bitIndexInsideByte =
+                        bitPosition |> modBy 8
+
                     currentBit : Int
                     currentBit =
                         bit bitIndexInsideByte byte
@@ -157,10 +147,6 @@ xorDisplayBit ( x, y ) xorBit memory =
                     resultBit : Int
                     resultBit =
                         Bitwise.xor currentBit xorBit
-
-                    hadCollision : Bool
-                    hadCollision =
-                        currentBit == 1 && resultBit == 0
 
                     mask : Int
                     mask =
@@ -177,7 +163,15 @@ xorDisplayBit ( x, y ) xorBit memory =
                             (Bitwise.shiftLeftBy (7 - bitIndexInsideByte) resultBit)
                 in
                 setUnsafe addr resultByte memory
-                    |> Result.map (\newMemory -> ( newMemory, { hadCollision = hadCollision } ))
+                    |> Result.map
+                        (\newMemory ->
+                            let
+                                hadCollision : Bool
+                                hadCollision =
+                                    currentBit == 1 && resultBit == 0
+                            in
+                            ( newMemory, { hadCollision = hadCollision } )
+                        )
             )
 
 
@@ -268,10 +262,6 @@ view { pc, i } memory =
                             y =
                                 index // displayedWidth
 
-                            b : String
-                            b =
-                                String.fromInt byte
-
                             color : String
                             color =
                                 if index == pc_ then
@@ -281,6 +271,11 @@ view { pc, i } memory =
                                     "yellow"
 
                                 else
+                                    let
+                                        b : String
+                                        b =
+                                            String.fromInt byte
+                                    in
                                     "rgb(" ++ b ++ "," ++ b ++ "," ++ b ++ ")"
                         in
                         Util.viewPixel color x y
