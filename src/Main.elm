@@ -1,9 +1,11 @@
-module Main exposing (Flags, Model, Msg, State, main)
+port module Main exposing (Flags, Model, Msg, State, main)
 
+import Audio exposing (Audio, AudioCmd, AudioData)
 import Bitwise
 import Browser
 import Browser.Events
 import Display
+import Duration
 import Error exposing (Error(..))
 import ExamplePrograms exposing (ProgramROM(..))
 import Html exposing (Html)
@@ -25,14 +27,39 @@ import Time
 import Util
 
 
-main : Program Flags Model Msg
+main : Program Flags (Audio.Model Msg Model) (Audio.Msg Msg)
 main =
-    Browser.document
+    Audio.documentWithAudio
         { init = init
         , update = update
         , subscriptions = subscriptions
         , view = view
+        , audio = audio_
+        , audioPort =
+            { toJS = audioPortToJS
+            , fromJS = audioPortFromJS
+            }
         }
+
+
+port audioPortToJS : Decode.Value -> Cmd msg
+
+
+port audioPortFromJS : (Decode.Value -> msg) -> Sub msg
+
+
+audio_ : AudioData -> Model -> Audio
+audio_ _ model =
+    let
+        computer : Computer
+        computer =
+            Zipper.current model.computer
+    in
+    if computer.audioTimer > 0 && (isRunning computer.state || isWaitingForKey computer.state) then
+        model.sound
+
+    else
+        Audio.silence
 
 
 type alias Flags =
@@ -44,12 +71,14 @@ type alias Model =
     { initialSeed : Int
     , computer : Zipper Computer
     , pressedKeys : Set Int
+    , sound : Audio
     }
 
 
 type Msg
     = Tick Float
     | DelayTimerTick
+    | AudioTimerTick
     | RunClicked
     | PauseClicked
     | ResetClicked
@@ -60,6 +89,7 @@ type Msg
     | KeyDown Int
     | KeyUp Int
     | ProgramSelected ProgramROM
+    | SoundLoaded (Result Audio.LoadError Audio.Source)
 
 
 type State
@@ -75,6 +105,7 @@ type alias Computer =
     , i : Address
     , registers : Registers
     , delayTimer : Int
+    , audioTimer : Int
     , callStack : List Address
     , state : State
     , randomSeed : Random.Seed
@@ -94,6 +125,7 @@ initComputer initialSeed rom =
     , i = Address 0
     , registers = Registers.init
     , delayTimer = 0
+    , audioTimer = 0
     , callStack = []
     , state = Paused
     , randomSeed = Random.initialSeed initialSeed
@@ -101,13 +133,17 @@ initComputer initialSeed rom =
     }
 
 
-init : Flags -> ( Model, Cmd Msg )
+init : Flags -> ( Model, Cmd Msg, AudioCmd Msg )
 init flags =
     ( { initialSeed = flags.initialSeed
       , computer = Zipper.singleton (initComputer flags.initialSeed initROM)
       , pressedKeys = Set.empty
+      , sound = Audio.silence
       }
     , Cmd.none
+    , Audio.loadAudio
+        SoundLoaded
+        "beep.mp3"
     )
 
 
@@ -126,8 +162,8 @@ reset model =
     { model | computer = Zipper.singleton (initComputer model.initialSeed currentRom) }
 
 
-view : Model -> Browser.Document Msg
-view model =
+view : AudioData -> Model -> Browser.Document Msg
+view audioData model =
     let
         computer : Computer
         computer =
@@ -325,7 +361,7 @@ viewPressedKeys pressedKeys =
 
 
 viewRegisters : Int -> Computer -> Html msg
-viewRegisters initialSeed { pc, i, delayTimer, registers } =
+viewRegisters initialSeed { pc, i, audioTimer, delayTimer, registers } =
     let
         viewRegister : { special : Bool } -> String -> Int -> Html msg
         viewRegister { special } name value =
@@ -352,6 +388,7 @@ viewRegisters initialSeed { pc, i, delayTimer, registers } =
             (viewRegister { special = True } "PC" pc_
                 :: viewRegister { special = True } "I" i_
                 :: viewRegister { special = True } "Delay" delayTimer
+                :: viewRegister { special = True } "Audio" audioTimer
                 :: viewRegister { special = True } "Initial random seed" initialSeed
                 :: List.map
                     (\reg ->
@@ -449,8 +486,8 @@ sixtyHertz =
     1000 / 60
 
 
-subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions : AudioData -> Model -> Sub Msg
+subscriptions _ model =
     let
         computer : Computer
         computer =
@@ -462,8 +499,15 @@ subscriptions model =
 
           else
             Sub.none
+
+        -- TODO maybe combine them together?
         , if computer.delayTimer > 0 then
             Time.every sixtyHertz (\_ -> DelayTimerTick)
+
+          else
+            Sub.none
+        , if computer.audioTimer > 0 then
+            Time.every sixtyHertz (\_ -> AudioTimerTick)
 
           else
             Sub.none
@@ -544,35 +588,47 @@ mapComputer fn model =
     { model | computer = Zipper.mapCurrent fn model.computer }
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
+update : AudioData -> Msg -> Model -> ( Model, Cmd Msg, AudioCmd Msg )
+update audioData msg model =
     case msg of
         Tick msDelta ->
             ( { model | computer = stepTimes (round msDelta) model.pressedKeys model.computer }
             , Cmd.none
+            , Audio.cmdNone
             )
 
         DelayTimerTick ->
             ( model
                 |> mapComputer (\c -> { c | delayTimer = c.delayTimer - 1 })
             , Cmd.none
+            , Audio.cmdNone
+            )
+
+        AudioTimerTick ->
+            ( model
+                |> mapComputer (\c -> { c | audioTimer = c.audioTimer - 1 })
+            , Cmd.none
+            , Audio.cmdNone
             )
 
         RunClicked ->
             ( { model | computer = Zipper.mapAfter (\_ -> []) model.computer }
                 |> mapComputer (\c -> { c | state = Running })
             , Cmd.none
+            , Audio.cmdNone
             )
 
         PauseClicked ->
             ( model
                 |> mapComputer (\c -> { c | state = Paused })
             , Cmd.none
+            , Audio.cmdNone
             )
 
         ResetClicked ->
             ( reset model
             , Cmd.none
+            , Audio.cmdNone
             )
 
         NewRandomSeedClicked ->
@@ -584,6 +640,7 @@ update msg model =
                         |> Tuple.first
               }
             , Cmd.none
+            , Audio.cmdNone
             )
 
         StepClicked ->
@@ -594,6 +651,7 @@ update msg model =
                         |> step model.pressedKeys
               }
             , Cmd.none
+            , Audio.cmdNone
             )
 
         PreviousStateClicked ->
@@ -605,6 +663,7 @@ update msg model =
                         |> Maybe.withDefault model.computer
               }
             , Cmd.none
+            , Audio.cmdNone
             )
 
         NextStateClicked ->
@@ -616,11 +675,38 @@ update msg model =
                         |> Maybe.withDefault model.computer
               }
             , Cmd.none
+            , Audio.cmdNone
             )
 
         ProgramSelected program ->
             ( loadROM program model
             , Cmd.none
+            , Audio.cmdNone
+            )
+
+        SoundLoaded (Ok sound) ->
+            ( { model
+                | sound =
+                    Audio.audioWithConfig
+                        { loop =
+                            Just
+                                { loopStart = Duration.seconds 0
+                                , loopEnd = Audio.length audioData sound
+                                }
+                        , playbackRate = 1.0
+                        , startAt = Duration.seconds 0
+                        }
+                        sound
+                        (Time.millisToPosix 0)
+              }
+            , Cmd.none
+            , Audio.cmdNone
+            )
+
+        SoundLoaded (Err _) ->
+            ( model
+            , Cmd.none
+            , Audio.cmdNone
             )
 
         KeyDown n ->
@@ -650,11 +736,13 @@ update msg model =
                 Paused ->
                     modelWithKey
             , Cmd.none
+            , Audio.cmdNone
             )
 
         KeyUp n ->
             ( { model | pressedKeys = Set.remove n model.pressedKeys }
             , Cmd.none
+            , Audio.cmdNone
             )
 
 
@@ -1259,8 +1347,8 @@ runInstruction pressedKeys instruction computer =
         SetDelayTimer reg ->
             { computer | delayTimer = Registers.get reg computer.registers }
 
-        SetAudioTimer _ ->
-            todo instruction computer
+        SetAudioTimer reg ->
+            { computer | audioTimer = Registers.get reg computer.registers }
 
         AddI reg ->
             let
