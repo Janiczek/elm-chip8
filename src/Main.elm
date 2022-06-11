@@ -11,6 +11,7 @@ import Html.Attributes as Attrs
 import Html.Events as Events
 import Instruction exposing (Address(..), Byte(..), Instruction(..))
 import Instruction.Parser
+import Json.Decode as Decode exposing (Decoder)
 import List.Extra as List
 import List.Zipper as Zipper exposing (Zipper)
 import Maybe.Extra as Maybe
@@ -19,6 +20,7 @@ import RadixInt
 import Random exposing (Generator)
 import Registers exposing (Register(..), Registers)
 import Result.Extra as Result
+import Set exposing (Set)
 import Time
 import Util
 
@@ -41,6 +43,7 @@ type alias Flags =
 type alias Model =
     { initialSeed : Int
     , computer : Zipper Computer
+    , pressedKeys : Set Int
     }
 
 
@@ -54,6 +57,8 @@ type Msg
     | PreviousStateClicked
     | NextStateClicked
     | NewRandomSeedClicked
+    | KeyDown Int
+    | KeyUp Int
     | ProgramSelected ProgramROM
 
 
@@ -99,6 +104,7 @@ init : Flags -> ( Model, Cmd Msg )
 init flags =
     ( { initialSeed = flags.initialSeed
       , computer = Zipper.singleton (initComputer flags.initialSeed initROM)
+      , pressedKeys = Set.empty
       }
     , Cmd.none
     )
@@ -152,6 +158,7 @@ view model =
                 [ viewRegisters model.initialSeed computer
                 , viewDisassembledCode computer
                 , viewCallStack computer.callStack
+                , viewPressedKeys model.pressedKeys
 
                 -- TODO view sprite currently under I
                 ]
@@ -305,6 +312,14 @@ viewCallStack callStack =
         ]
 
 
+viewPressedKeys : Set Int -> Html msg
+viewPressedKeys pressedKeys =
+    Html.div []
+        [ Html.h2 [] [ Html.text "Pressed keys" ]
+        , Html.div [] [ Html.text <| String.join ", " (List.map Util.hex (Set.toList pressedKeys)) ]
+        ]
+
+
 viewRegisters : Int -> Computer -> Html msg
 viewRegisters initialSeed { pc, i, delayTimer, registers } =
     let
@@ -448,7 +463,76 @@ subscriptions model =
 
           else
             Sub.none
+        , Browser.Events.onKeyDown (keyDecoder KeyDown)
+        , Browser.Events.onKeyUp (keyDecoder KeyUp)
         ]
+
+
+keyDecoder : (Int -> msg) -> Decoder msg
+keyDecoder toMsg =
+    Decode.field "key" Decode.string
+        |> Decode.andThen toKey
+        |> Decode.map toMsg
+
+
+toKey : String -> Decoder Int
+toKey string =
+    case String.uncons string of
+        Just ( char, "" ) ->
+            case Char.toLower char of
+                '0' ->
+                    Decode.succeed 0
+
+                '1' ->
+                    Decode.succeed 1
+
+                '2' ->
+                    Decode.succeed 2
+
+                '3' ->
+                    Decode.succeed 3
+
+                '4' ->
+                    Decode.succeed 4
+
+                '5' ->
+                    Decode.succeed 5
+
+                '6' ->
+                    Decode.succeed 6
+
+                '7' ->
+                    Decode.succeed 7
+
+                '8' ->
+                    Decode.succeed 8
+
+                '9' ->
+                    Decode.succeed 9
+
+                'a' ->
+                    Decode.succeed 10
+
+                'b' ->
+                    Decode.succeed 11
+
+                'c' ->
+                    Decode.succeed 12
+
+                'd' ->
+                    Decode.succeed 13
+
+                'e' ->
+                    Decode.succeed 14
+
+                'f' ->
+                    Decode.succeed 15
+
+                _ ->
+                    Decode.fail "unsupported key"
+
+        _ ->
+            Decode.fail "unsupported key"
 
 
 mapComputer : (Computer -> Computer) -> Model -> Model
@@ -460,7 +544,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Tick msDelta ->
-            ( { model | computer = stepTimes (round msDelta) model.computer }
+            ( { model | computer = stepTimes (round msDelta) model.pressedKeys model.computer }
             , Cmd.none
             )
 
@@ -503,7 +587,7 @@ update msg model =
                 | computer =
                     model.computer
                         |> Zipper.mapAfter (\_ -> [])
-                        |> step
+                        |> step model.pressedKeys
               }
             , Cmd.none
             )
@@ -535,6 +619,16 @@ update msg model =
             , Cmd.none
             )
 
+        KeyDown n ->
+            ( { model | pressedKeys = Set.insert n model.pressedKeys }
+            , Cmd.none
+            )
+
+        KeyUp n ->
+            ( { model | pressedKeys = Set.remove n model.pressedKeys }
+            , Cmd.none
+            )
+
 
 pauseIfRunning : Computer -> Computer
 pauseIfRunning computer =
@@ -545,14 +639,14 @@ pauseIfRunning computer =
         computer
 
 
-stepTimes : Int -> Zipper Computer -> Zipper Computer
-stepTimes n computer =
+stepTimes : Int -> Set Int -> Zipper Computer -> Zipper Computer
+stepTimes n pressedKeys computer =
     let
         currentComputer =
             Zipper.current computer
     in
     if isRunning currentComputer.state then
-        doNTimes n stepIfRunning computer
+        doNTimes n (stepIfRunning pressedKeys) computer
 
     else
         computer
@@ -580,21 +674,21 @@ doNTimes n fn value =
         doNTimes (n - 1) fn (fn value)
 
 
-stepIfRunning : Zipper Computer -> Zipper Computer
-stepIfRunning computer =
+stepIfRunning : Set Int -> Zipper Computer -> Zipper Computer
+stepIfRunning pressedKeys computer =
     let
         currentComputer =
             Zipper.current computer
     in
     if isRunning currentComputer.state then
-        step computer
+        step pressedKeys computer
 
     else
         computer
 
 
-step : Zipper Computer -> Zipper Computer
-step computer =
+step : Set Int -> Zipper Computer -> Zipper Computer
+step pressedKeys computer =
     let
         currentComputer : Computer
         currentComputer =
@@ -612,7 +706,7 @@ step computer =
 
                     else
                         currentComputer
-                            |> runInstruction instruction
+                            |> runInstruction pressedKeys instruction
                             |> incrementPCIfNeeded instruction
     in
     computer
@@ -631,7 +725,7 @@ step computer =
 
 incrementPCIfNeeded : Instruction -> Computer -> Computer
 incrementPCIfNeeded instruction computer =
-    if shouldIncrementPC instruction then
+    if isRunning computer.state && shouldIncrementPC instruction then
         incrementPC computer
 
     else
@@ -758,8 +852,8 @@ todo instruction c =
     { c | state = Halted (UnimplementedInstruction instruction) }
 
 
-runInstruction : Instruction -> Computer -> Computer
-runInstruction instruction computer =
+runInstruction : Set Int -> Instruction -> Computer -> Computer
+runInstruction pressedKeys instruction computer =
     case instruction of
         Clear ->
             { computer | memory = Memory.clearDisplay computer.memory }
@@ -1079,11 +1173,19 @@ runInstruction instruction computer =
                         , registers = Registers.set VF newVF computer.registers
                     }
 
-        DoIfKeyNotPressed _ ->
-            todo instruction computer
+        DoIfKeyNotPressed reg ->
+            if not <| Set.member (Registers.get reg computer.registers) pressedKeys then
+                computer
 
-        DoIfKeyPressed _ ->
-            todo instruction computer
+            else
+                incrementPC computer
+
+        DoIfKeyPressed reg ->
+            if Set.member (Registers.get reg computer.registers) pressedKeys then
+                computer
+
+            else
+                incrementPC computer
 
         GetDelayTimer reg ->
             { computer | registers = Registers.set reg computer.delayTimer computer.registers }

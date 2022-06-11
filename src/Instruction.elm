@@ -144,11 +144,11 @@ code instruction =
                 , "h=" ++ String.fromInt height
                 ]
 
-        DoIfKeyNotPressed _ ->
-            "TODO"
+        DoIfKeyNotPressed reg ->
+            "if (!key_pressed(" ++ Registers.name reg ++ "))"
 
-        DoIfKeyPressed _ ->
-            "TODO"
+        DoIfKeyPressed reg ->
+            "if (key_pressed(" ++ Registers.name reg ++ "))"
 
         GetDelayTimer reg ->
             setReg reg "delay_t"

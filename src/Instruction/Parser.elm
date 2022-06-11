@@ -162,6 +162,14 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
             (registerLo hi)
             (registerHi lo)
 
+    else if hh == 0x0E && lo == 0x9E then
+        registerLo hi
+            |> Result.map (\reg -> DoIfKeyPressed reg)
+
+    else if hh == 0x0E && lo == 0xA1 then
+        registerLo hi
+            |> Result.map (\reg -> DoIfKeyNotPressed reg)
+
     else if hh == 0x0F && lo == 0x07 then
         registerLo hi
             |> Result.map (\reg -> GetDelayTimer reg)
