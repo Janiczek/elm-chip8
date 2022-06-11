@@ -446,9 +446,13 @@ step model =
             { model | state = Halted err }
 
         Ok instruction ->
-            model
-                |> runInstruction instruction
-                |> incrementPCIfNeeded instruction
+            if instruction == Jump model.pc then
+                { model | state = Halted (InfiniteLoop model.pc) }
+
+            else
+                model
+                    |> runInstruction instruction
+                    |> incrementPCIfNeeded instruction
 
 
 incrementPCIfNeeded : Instruction -> Model -> Model

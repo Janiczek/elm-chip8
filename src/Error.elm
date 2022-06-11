@@ -11,6 +11,7 @@ type Error
     | MemoryOverflow Address
     | ParsedInvalidRegister Int
     | ReturningWithEmptyCallStack
+    | InfiniteLoop Address
 
 
 toString : Error -> String
@@ -33,3 +34,6 @@ toString err =
 
         ReturningWithEmptyCallStack ->
             "Returning with empty call stack"
+
+        InfiniteLoop (Address addr) ->
+            "Tried to run an infinite loop at address " ++ Util.hex addr
