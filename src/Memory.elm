@@ -283,7 +283,7 @@ view { pc, i } memory =
                                     "red"
 
                                 else if index == i_ then
-                                    "yellow"
+                                    "lime"
 
                                 else
                                     let

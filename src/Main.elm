@@ -53,6 +53,7 @@ type Msg
     | StepClicked
     | PreviousStateClicked
     | NextStateClicked
+    | NewRandomSeedClicked
     | ProgramSelected ProgramROM
 
 
@@ -77,7 +78,7 @@ type alias Computer =
 
 initROM : ProgramROM
 initROM =
-    JumpingXO
+    FramedMk2
 
 
 initComputer : Int -> ProgramROM -> Computer
@@ -148,11 +149,10 @@ view model =
                 , viewRomButtons
                 ]
             , Html.div []
-                [ viewRegisters computer
+                [ viewRegisters model.initialSeed computer
                 , viewDisassembledCode computer
                 , viewCallStack computer.callStack
 
-                -- TODO viewInitialSeed computer.randomSeed
                 -- TODO view sprite currently under I
                 ]
             ]
@@ -225,6 +225,9 @@ viewButtons computer =
             , Html.button
                 [ Events.onClick ResetClicked ]
                 [ Html.text "Reset" ]
+            , Html.button
+                [ Events.onClick NewRandomSeedClicked ]
+                [ Html.text "New random seed" ]
             ]
         , Html.div []
             [ Html.button
@@ -302,8 +305,8 @@ viewCallStack callStack =
         ]
 
 
-viewRegisters : Computer -> Html msg
-viewRegisters { pc, i, delayTimer, registers } =
+viewRegisters : Int -> Computer -> Html msg
+viewRegisters initialSeed { pc, i, delayTimer, registers } =
     let
         viewRegister : { special : Bool } -> String -> Int -> Html msg
         viewRegister { special } name value =
@@ -330,6 +333,7 @@ viewRegisters { pc, i, delayTimer, registers } =
             (viewRegister { special = True } "PC" pc_
                 :: viewRegister { special = True } "I" i_
                 :: viewRegister { special = True } "Delay" delayTimer
+                :: viewRegister { special = True } "Initial random seed" initialSeed
                 :: List.map
                     (\reg ->
                         viewRegister
@@ -480,6 +484,17 @@ update msg model =
 
         ResetClicked ->
             ( reset model
+            , Cmd.none
+            )
+
+        NewRandomSeedClicked ->
+            ( { model
+                | initialSeed =
+                    Random.step
+                        (Random.int 0 Random.maxInt)
+                        (Random.initialSeed model.initialSeed)
+                        |> Tuple.first
+              }
             , Cmd.none
             )
 
