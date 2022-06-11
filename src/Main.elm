@@ -993,11 +993,6 @@ shouldIncrementPC instruction =
             True
 
 
-todo : Instruction -> Computer -> Computer
-todo instruction c =
-    { c | state = Halted (UnimplementedInstruction instruction) }
-
-
 runInstruction : Set Int -> Instruction -> Computer -> Computer
 runInstruction pressedKeys instruction computer =
     case instruction of
@@ -1469,7 +1464,7 @@ runInstruction pressedKeys instruction computer =
                     }
 
         MagicFn _ ->
-            todo instruction computer
+            { computer | state = Halted (UnimplementedInstruction instruction) }
 
 
 setPressedKey : Register -> Int -> Computer -> Computer
