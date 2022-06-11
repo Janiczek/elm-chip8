@@ -461,21 +461,18 @@ update msg model =
             )
 
         DelayTimerTick ->
-            -- TODO what about old states?
             ( model
                 |> mapComputer (\c -> { c | delayTimer = c.delayTimer - 1 })
             , Cmd.none
             )
 
         RunClicked ->
-            -- TODO what about old states?
             ( { model | computer = Zipper.mapAfter (\_ -> []) model.computer }
                 |> mapComputer (\c -> { c | state = Running })
             , Cmd.none
             )
 
         PauseClicked ->
-            -- TODO what about old states?
             ( model
                 |> mapComputer (\c -> { c | state = Paused })
             , Cmd.none
