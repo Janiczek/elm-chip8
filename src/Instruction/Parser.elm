@@ -68,6 +68,12 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
         ll : Int
         ll =
             loNibble lo
+
+        regReg : ({ from : Register, to : Register } -> Instruction) -> Result Error Instruction
+        regReg toInstruction =
+            Result.map2 (\vx vy -> toInstruction { from = vy, to = vx })
+                (registerLo hi)
+                (registerHi lo)
     in
     if hi == 0x00 && lo == 0xE0 then
         Ok Clear
@@ -89,7 +95,7 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
         registerLo hi
             |> Result.map (\reg -> DoIfEq reg lo_)
 
-    else if hh == 0x05 then
+    else if hh == 0x05 && ll == 0x00 then
         Result.map2 DoIfNeqReg
             (registerLo hi)
             (registerHi lo)
@@ -103,27 +109,28 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
             |> Result.map (\reg -> AddRegConst reg lo_)
 
     else if hh == 0x08 && ll == 0x00 then
-        Result.map2 (\vx vy -> SetRegReg { from = vy, to = vx })
-            (registerLo hi)
-            (registerHi lo)
+        regReg SetRegReg
 
     else if hh == 0x08 && ll == 0x02 then
-        Result.map2 (\vx vy -> AndRegReg { from = vy, to = vx })
-            (registerLo hi)
-            (registerHi lo)
+        regReg AndRegReg
+
+    else if hh == 0x08 && ll == 0x03 then
+        regReg XorRegReg
 
     else if hh == 0x08 && ll == 0x04 then
-        Result.map2 (\vx vy -> AddRegReg { from = vy, to = vx })
-            (registerLo hi)
-            (registerHi lo)
+        regReg AddRegReg
+
+    else if hh == 0x08 && ll == 0x05 then
+        regReg SubRegReg
 
     else if hh == 0x08 && ll == 0x06 then
-        Result.map2 (\vx vy -> ShiftRightBy1 { from = vy, to = vx })
-            (registerLo hi)
-            (registerHi lo)
+        regReg ShiftRightBy1
 
     else if hh == 0x08 && ll == 0x0E then
-        Result.map2 (\vx vy -> ShiftLeftBy1 { from = vy, to = vx })
+        regReg ShiftLeftBy1
+
+    else if hh == 0x09 && ll == 0x00 then
+        Result.map2 DoIfEqReg
             (registerLo hi)
             (registerHi lo)
 

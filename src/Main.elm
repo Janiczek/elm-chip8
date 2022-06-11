@@ -646,7 +646,12 @@ runInstruction instruction model =
             }
 
         XorRegReg { from, to } ->
-            todo model
+            { model
+                | registers =
+                    Registers.map to
+                        (\oldTo -> Bitwise.xor oldTo (Registers.get from model.registers))
+                        model.registers
+            }
 
         AddRegReg { from, to } ->
             let
@@ -659,15 +664,12 @@ runInstruction instruction model =
                 rawNewTo =
                     oldTo + from_
 
-                newTo =
-                    rawNewTo |> modBy 0x0100
-
-                newVF =
-                    if rawNewTo > 0xFF then
-                        1
+                ( newTo, newVF ) =
+                    if rawNewTo >= 0x0100 then
+                        ( rawNewTo - 0x0100, 1 )
 
                     else
-                        0
+                        ( rawNewTo, 0 )
             in
             { model
                 | registers =
@@ -677,7 +679,29 @@ runInstruction instruction model =
             }
 
         SubRegReg { from, to } ->
-            todo model
+            let
+                oldTo =
+                    Registers.get to model.registers
+
+                from_ =
+                    Registers.get from model.registers
+
+                rawNewTo =
+                    oldTo - from_
+
+                ( newTo, newVF ) =
+                    if rawNewTo < 0 then
+                        ( rawNewTo + 0x0100, 0 )
+
+                    else
+                        ( rawNewTo, 1 )
+            in
+            { model
+                | registers =
+                    model.registers
+                        |> Registers.set to newTo
+                        |> Registers.set VF newVF
+            }
 
         ShiftRightBy1 { from, to } ->
             let
@@ -726,7 +750,11 @@ runInstruction instruction model =
             }
 
         DoIfEqReg reg1 reg2 ->
-            todo model
+            if Registers.get reg1 model.registers == Registers.get reg2 model.registers then
+                model
+
+            else
+                incrementPC model
 
         SetI addr ->
             { model | i = addr }
