@@ -150,8 +150,8 @@ code instruction =
         DoIfKeyPressed _ ->
             "TODO"
 
-        GetDelayTimer _ ->
-            "TODO"
+        GetDelayTimer reg ->
+            setReg reg "delay_t"
 
         SetPressedKey _ ->
             "TODO"
