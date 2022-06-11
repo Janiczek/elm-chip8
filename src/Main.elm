@@ -12,6 +12,8 @@ import Html.Events as Events
 import Instruction exposing (Address(..), Byte(..), Instruction(..))
 import Instruction.Parser
 import List.Extra as List
+import List.Zipper as Zipper exposing (Zipper)
+import Maybe.Extra as Maybe
 import Memory exposing (Memory)
 import RadixInt
 import Random exposing (Generator)
@@ -37,15 +39,8 @@ type alias Flags =
 
 
 type alias Model =
-    { memory : Memory
-    , pc : Address
-    , i : Address
-    , registers : Registers
-    , delayTimer : Int
-    , callStack : List Address
-    , state : State
-    , randomSeed : Random.Seed
-    , initialSeed : Int
+    { initialSeed : Int
+    , computer : Zipper Computer
     }
 
 
@@ -56,6 +51,8 @@ type Msg
     | PauseClicked
     | ResetClicked
     | StepClicked
+    | PreviousStateClicked
+    | NextStateClicked
     | ProgramSelected ProgramROM
 
 
@@ -65,22 +62,42 @@ type State
     | Halted Error
 
 
+type alias Computer =
+    { memory : Memory
+    , pc : Address
+    , i : Address
+    , registers : Registers
+    , delayTimer : Int
+    , callStack : List Address
+    , state : State
+    , randomSeed : Random.Seed
+    , rom : ProgramROM
+    }
+
+
 initROM : ProgramROM
 initROM =
-    Trip8
+    JumpingXO
+
+
+initComputer : Int -> ProgramROM -> Computer
+initComputer initialSeed rom =
+    { memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program rom)
+    , pc = Address Memory.programStart
+    , i = Address 0
+    , registers = Registers.init
+    , delayTimer = 0
+    , callStack = []
+    , state = Paused
+    , randomSeed = Random.initialSeed initialSeed
+    , rom = rom
+    }
 
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program initROM)
-      , pc = Address Memory.programStart
-      , i = Address 0
-      , registers = Registers.init
-      , delayTimer = 0
-      , callStack = []
-      , state = Paused
-      , randomSeed = Random.initialSeed flags.initialSeed
-      , initialSeed = flags.initialSeed
+    ( { initialSeed = flags.initialSeed
+      , computer = Zipper.singleton (initComputer flags.initialSeed initROM)
       }
     , Cmd.none
     )
@@ -88,102 +105,65 @@ init flags =
 
 loadROM : ProgramROM -> Model -> Model
 loadROM rom model =
-    { model
-        | memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program rom)
-        , pc = Address Memory.programStart
-        , i = Address 0
-        , registers = Registers.init
-        , delayTimer = 0
-        , callStack = []
-        , state = Paused
-        , randomSeed = Random.initialSeed model.initialSeed
-    }
+    { model | computer = Zipper.singleton (initComputer model.initialSeed rom) }
 
 
 reset : Model -> Model
 reset model =
-    { model
-        | memory = Memory.init |> Memory.loadProgram (ExamplePrograms.program initROM)
-        , pc = Address Memory.programStart
-        , i = Address 0
-        , registers = Registers.init
-        , delayTimer = 0
-        , callStack = []
-        , state = Paused
-        , randomSeed = Random.initialSeed model.initialSeed
-    }
+    let
+        currentRom : ProgramROM
+        currentRom =
+            (Zipper.current model.computer).rom
+    in
+    { model | computer = Zipper.singleton (initComputer model.initialSeed currentRom) }
 
 
 view : Model -> Browser.Document Msg
 view model =
+    let
+        computer : Computer
+        computer =
+            Zipper.current model.computer
+    in
     { title = "CHIP-8 Emulator"
     , body =
         [ Html.div
             [ Attrs.style "display" "flex"
-            , Attrs.style "flex-direction" "row"
             , Attrs.style "gap" "8px"
             ]
-            [ Html.div []
-                [ Display.view model.memory
+            [ Html.div
+                [ Attrs.style "display" "flex"
+                , Attrs.style "flex-direction" "column"
+                , Attrs.style "gap" "8px"
+                ]
+                [ Display.view computer.memory
                 , Memory.view
-                    { pc = model.pc
-                    , i = model.i
+                    { pc = computer.pc
+                    , i = computer.i
                     }
-                    model.memory
-                , viewState model.state
-                , viewButtons model.state
+                    computer.memory
+                , viewButtons model.computer
+                , viewHistory model.computer
+                , viewState computer.state
+                , viewRomButtons
                 ]
             , Html.div []
-                [ viewRegisters model
-                , viewDisassembledCode model
-                , viewCallStack model.callStack
+                [ viewRegisters computer
+                , viewDisassembledCode computer
+                , viewCallStack computer.callStack
 
-                -- TODO viewInitialSeed model.randomSeed
+                -- TODO viewInitialSeed computer.randomSeed
+                -- TODO view sprite currently under I
                 ]
             ]
         ]
     }
 
 
-viewState : State -> Html msg
-viewState state =
+viewRomButtons : Html Msg
+viewRomButtons =
     Html.div []
-        [ Html.h2 [] [ Html.text "State" ]
-        , case state of
-            Running ->
-                Html.text "Running"
-
-            Paused ->
-                Html.text "Paused"
-
-            Halted err ->
-                Html.text <| "Halted: " ++ Error.toString err
-        ]
-
-
-viewButtons : State -> Html Msg
-viewButtons state =
-    Html.div []
-        [ Html.div
-            []
-            [ Html.button
-                [ Events.onClick RunClicked
-                , Attrs.disabled (isRunning state)
-                ]
-                [ Html.text "Run" ]
-            , Html.button
-                [ Events.onClick StepClicked ]
-                [ Html.text "Step" ]
-            , Html.button
-                [ Events.onClick PauseClicked
-                , Attrs.disabled (not (isRunning state))
-                ]
-                [ Html.text "Pause" ]
-            , Html.button
-                [ Events.onClick ResetClicked ]
-                [ Html.text "Reset" ]
-            ]
-        , Html.h4 [] [ Html.text "Load a ROM:" ]
+        [ Html.h4 [] [ Html.text "Load a ROM:" ]
         , Html.div []
             (ExamplePrograms.all
                 |> List.greedyGroupsOf 5
@@ -203,6 +183,109 @@ viewButtons state =
         ]
 
 
+viewState : State -> Html msg
+viewState state =
+    Html.div
+        [ Attrs.style "max-width" "300px" ]
+        [ Html.h2 [] [ Html.text "State" ]
+        , case state of
+            Running ->
+                Html.text "Running"
+
+            Paused ->
+                Html.text "Paused"
+
+            Halted err ->
+                Html.text <| "Halted: " ++ Error.toString err
+        ]
+
+
+viewButtons : Zipper Computer -> Html Msg
+viewButtons computer =
+    let
+        currentState : State
+        currentState =
+            (Zipper.current computer).state
+    in
+    Html.div []
+        [ Html.div []
+            [ Html.button
+                [ Events.onClick RunClicked
+                , Attrs.disabled (isRunning currentState)
+                ]
+                [ Html.text "Run" ]
+            , Html.button
+                [ Events.onClick StepClicked ]
+                [ Html.text "Step" ]
+            , Html.button
+                [ Events.onClick PauseClicked
+                , Attrs.disabled (not (isRunning currentState))
+                ]
+                [ Html.text "Pause" ]
+            , Html.button
+                [ Events.onClick ResetClicked ]
+                [ Html.text "Reset" ]
+            ]
+        , Html.div []
+            [ Html.button
+                [ Events.onClick PreviousStateClicked
+                , Attrs.disabled (isRunning currentState || Zipper.isFirst computer)
+                ]
+                [ Html.text "← Previous" ]
+            , Html.button
+                [ Events.onClick NextStateClicked
+                , Attrs.disabled (isRunning currentState || Zipper.isLast computer)
+                ]
+                [ Html.text "Next →" ]
+            ]
+        ]
+
+
+viewHistory : Zipper Computer -> Html msg
+viewHistory computer =
+    -- TODO let user click on a state to skip to it?
+    let
+        size : String
+        size =
+            "5px"
+
+        emptyDots : Int -> List (Html msg)
+        emptyDots n =
+            List.repeat n emptyDot
+
+        emptyDot : Html msg
+        emptyDot =
+            dot "white"
+
+        fullDot : Html msg
+        fullDot =
+            dot "red"
+
+        dot : String -> Html msg
+        dot color =
+            Html.div
+                [ Attrs.style "min-width" size
+                , Attrs.style "min-height" size
+                , Attrs.style "background-color" color
+                , Attrs.style "border" "1px solid black"
+                ]
+                []
+    in
+    Html.div
+        [ Attrs.style "display" "flex"
+        , Attrs.style "flex-wrap" "wrap"
+        , Attrs.style "gap" "1px"
+        , Attrs.style "padding-top" "8px"
+        , Attrs.style "max-width" "300px"
+        ]
+        ([ emptyDots (List.length (Zipper.before computer))
+         , [ fullDot ] -- present
+         , emptyDots (List.length (Zipper.after computer))
+         ]
+            |> List.concat
+        )
+
+
 viewCallStack : List Address -> Html msg
 viewCallStack callStack =
     Html.div []
@@ -219,7 +302,7 @@ viewCallStack callStack =
         ]
 
 
-viewRegisters : Model -> Html msg
+viewRegisters : Computer -> Html msg
 viewRegisters { pc, i, delayTimer, registers } =
     let
         viewRegister : { special : Bool } -> String -> Int -> Html msg
@@ -259,11 +342,11 @@ viewRegisters { pc, i, delayTimer, registers } =
         ]
 
 
-viewDisassembledCode : Model -> Html msg
-viewDisassembledCode model =
+viewDisassembledCode : Computer -> Html msg
+viewDisassembledCode computer =
     let
         (Address pc) =
-            model.pc
+            computer.pc
 
         range : List ( Address, ( Byte, Byte ) )
         range =
@@ -280,22 +363,22 @@ viewDisassembledCode model =
                                 Address (pc + 2 * delta + 1)
                         in
                         Result.map2 (\hi lo -> ( address1, ( hi, lo ) ))
-                            (Memory.get address1 model.memory)
-                            (Memory.get address2 model.memory)
+                            (Memory.get address1 computer.memory)
+                            (Memory.get address2 computer.memory)
                             |> Result.toMaybe
                     )
 
         viewLine : ( Address, ( Byte, Byte ) ) -> Html msg
         viewLine ( Address addr, ( (Byte hi_) as hi, (Byte lo_) as lo ) ) =
             let
-                ( instruction, arguments ) =
+                ( instruction, code ) =
                     case Instruction.Parser.parse ( hi, lo ) of
                         Err _ ->
                             ( "", "" )
 
                         Ok instr ->
                             ( Instruction.toString instr
-                            , Instruction.arguments instr
+                            , Instruction.code instr
                             )
             in
             Html.tr
@@ -309,8 +392,8 @@ viewDisassembledCode model =
                 ]
                 [ Html.td [ cellPadding ] [ Html.text <| Util.hex addr ]
                 , Html.td [ cellPadding ] [ Html.text <| Util.hexBytePair ( hi_, lo_ ) ]
-                , Html.td [ cellPadding ] [ Html.text instruction ]
-                , Html.td [ cellPadding ] [ Html.text arguments ]
+                , Html.td [ cellPadding, Attrs.style "color" "grey" ] [ Html.text instruction ]
+                , Html.td [ cellPadding ] [ Html.text code ]
                 ]
 
         cellPadding : Html.Attribute msg
@@ -326,10 +409,10 @@ viewDisassembledCode model =
             ]
             [ Html.thead []
                 [ Html.tr []
-                    [ Html.th [ cellPadding ] [ Html.text "Address" ]
-                    , Html.th [ cellPadding ] [ Html.text "Opcode" ]
-                    , Html.th [ cellPadding ] [ Html.text "Instruction" ]
-                    , Html.th [ cellPadding ] [ Html.text "Arguments" ]
+                    [ Html.th [ cellPadding, Attrs.style "text-align" "left" ] [ Html.text "Address" ]
+                    , Html.th [ cellPadding, Attrs.style "text-align" "left" ] [ Html.text "Opcode" ]
+                    , Html.th [ cellPadding, Attrs.style "text-align" "left" ] [ Html.text "Instruction" ]
+                    , Html.th [ cellPadding, Attrs.style "text-align" "left" ] [ Html.text "Code" ]
                     ]
                 ]
             , Html.tbody []
@@ -345,13 +428,18 @@ sixtyHertz =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
+    let
+        computer : Computer
+        computer =
+            Zipper.current model.computer
+    in
     Sub.batch
-        [ if isRunning model.state then
+        [ if isRunning computer.state then
             Browser.Events.onAnimationFrameDelta Tick
 
           else
             Sub.none
-        , if model.delayTimer > 0 then
+        , if computer.delayTimer > 0 then
             Time.every sixtyHertz (\_ -> DelayTimerTick)
 
           else
@@ -359,27 +447,37 @@ subscriptions model =
         ]
 
 
+mapComputer : (Computer -> Computer) -> Model -> Model
+mapComputer fn model =
+    { model | computer = Zipper.mapCurrent fn model.computer }
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Tick msDelta ->
-            ( model
-                |> stepTimes (round msDelta)
+            ( { model | computer = stepTimes (round msDelta) model.computer }
             , Cmd.none
             )
 
         DelayTimerTick ->
-            ( { model | delayTimer = model.delayTimer - 1 }
+            -- TODO what about old states?
+            ( model
+                |> mapComputer (\c -> { c | delayTimer = c.delayTimer - 1 })
             , Cmd.none
             )
 
         RunClicked ->
-            ( { model | state = Running }
+            -- TODO what about old states?
+            ( { model | computer = Zipper.mapAfter (\_ -> []) model.computer }
+                |> mapComputer (\c -> { c | state = Running })
             , Cmd.none
             )
 
         PauseClicked ->
-            ( { model | state = Paused }
+            -- TODO what about old states?
+            ( model
+                |> mapComputer (\c -> { c | state = Paused })
             , Cmd.none
             )
 
@@ -389,7 +487,34 @@ update msg model =
             )
 
         StepClicked ->
-            ( step model
+            ( { model
+                | computer =
+                    model.computer
+                        |> Zipper.mapAfter (\_ -> [])
+                        |> step
+              }
+            , Cmd.none
+            )
+
+        PreviousStateClicked ->
+            ( { model
+                | computer =
+                    model.computer
+                        |> Zipper.previous
+                        |> Maybe.map (Zipper.mapCurrent pauseIfRunning)
+                        |> Maybe.withDefault model.computer
+              }
+            , Cmd.none
+            )
+
+        NextStateClicked ->
+            ( { model
+                | computer =
+                    model.computer
+                        |> Zipper.next
+                        |> Maybe.map (Zipper.mapCurrent pauseIfRunning)
+                        |> Maybe.withDefault model.computer
+              }
             , Cmd.none
             )
 
@@ -399,13 +524,26 @@ update msg model =
             )
 
 
-stepTimes : Int -> Model -> Model
-stepTimes n model =
-    if isRunning model.state then
-        doNTimes n stepIfRunning model
+pauseIfRunning : Computer -> Computer
+pauseIfRunning computer =
+    if isRunning computer.state then
+        { computer | state = Paused }
 
     else
-        model
+        computer
+
+
+stepTimes : Int -> Zipper Computer -> Zipper Computer
+stepTimes n computer =
+    let
+        currentComputer =
+            Zipper.current computer
+    in
+    if isRunning currentComputer.state then
+        doNTimes n stepIfRunning computer
+
+    else
+        computer
 
 
 isRunning : State -> Bool
@@ -430,47 +568,71 @@ doNTimes n fn value =
         doNTimes (n - 1) fn (fn value)
 
 
-stepIfRunning : Model -> Model
-stepIfRunning model =
-    if isRunning model.state then
-        step model
+stepIfRunning : Zipper Computer -> Zipper Computer
+stepIfRunning computer =
+    let
+        currentComputer =
+            Zipper.current computer
+    in
+    if isRunning currentComputer.state then
+        step computer
 
     else
-        model
+        computer
 
 
-step : Model -> Model
-step model =
-    case Memory.getInstruction model.pc model.memory of
-        Err err ->
-            { model | state = Halted err }
+step : Zipper Computer -> Zipper Computer
+step computer =
+    let
+        currentComputer : Computer
+        currentComputer =
+            Zipper.current computer
 
-        Ok instruction ->
-            if instruction == Jump model.pc then
-                { model | state = Halted (InfiniteLoop model.pc) }
+        newComputer : Computer
+        newComputer =
+            case Memory.getInstruction currentComputer.pc currentComputer.memory of
+                Err err ->
+                    { currentComputer | state = Halted err }
 
-            else
-                model
-                    |> runInstruction instruction
-                    |> incrementPCIfNeeded instruction
+                Ok instruction ->
+                    if instruction == Jump currentComputer.pc then
+                        { currentComputer | state = Halted (InfiniteLoop currentComputer.pc) }
+
+                    else
+                        currentComputer
+                            |> runInstruction instruction
+                            |> incrementPCIfNeeded instruction
+    in
+    computer
+        |> Zipper.mapAfter (\future -> newComputer :: future)
+        |> Zipper.next
+        |> Maybe.withDefault computer
+        |> Zipper.mapBefore
+            (\past ->
+                let
+                    n =
+                        List.length past
+                in
+                List.drop (n - 10) past
+            )
 
 
-incrementPCIfNeeded : Instruction -> Model -> Model
-incrementPCIfNeeded instruction model =
+incrementPCIfNeeded : Instruction -> Computer -> Computer
+incrementPCIfNeeded instruction computer =
     if shouldIncrementPC instruction then
-        incrementPC model
+        incrementPC computer
 
     else
-        model
+        computer
 
 
-incrementPC : Model -> Model
-incrementPC model =
+incrementPC : Computer -> Computer
+incrementPC computer =
     let
         (Address pc) =
-            model.pc
+            computer.pc
     in
-    { model | pc = Address (pc + 2) }
+    { computer | pc = Address (pc + 2) }
 
 
 shouldIncrementPC : Instruction -> Bool
@@ -579,110 +741,110 @@ shouldIncrementPC instruction =
             True
 
 
-runInstruction : Instruction -> Model -> Model
-runInstruction instruction model =
-    let
-        todo : Model -> Model
-        todo m =
-            { m | state = Halted (UnimplementedInstruction instruction) }
-    in
+todo : Instruction -> Computer -> Computer
+todo instruction c =
+    { c | state = Halted (UnimplementedInstruction instruction) }
+
+
+runInstruction : Instruction -> Computer -> Computer
+runInstruction instruction computer =
     case instruction of
         Clear ->
-            { model | memory = Memory.clearDisplay model.memory }
+            { computer | memory = Memory.clearDisplay computer.memory }
 
         Return ->
-            case model.callStack of
+            case computer.callStack of
                 addr :: rest ->
-                    { model
+                    { computer
                         | pc = addr
                         , callStack = rest
                     }
 
                 _ ->
-                    { model | state = Halted ReturningWithEmptyCallStack }
+                    { computer | state = Halted ReturningWithEmptyCallStack }
 
         Jump addr ->
-            { model | pc = addr }
+            { computer | pc = addr }
 
         Call addr ->
             let
                 (Address pc) =
-                    model.pc
+                    computer.pc
             in
-            { model
+            { computer
                 | pc = addr
-                , callStack = Address (pc + 2) :: model.callStack
+                , callStack = Address (pc + 2) :: computer.callStack
             }
 
         DoIfNeq reg (Byte byte) ->
-            if Registers.get reg model.registers /= byte then
-                model
+            if Registers.get reg computer.registers /= byte then
+                computer
 
             else
-                incrementPC model
+                incrementPC computer
 
         DoIfEq reg (Byte byte) ->
-            if Registers.get reg model.registers == byte then
-                model
+            if Registers.get reg computer.registers == byte then
+                computer
 
             else
-                incrementPC model
+                incrementPC computer
 
         DoIfNeqReg reg1 reg2 ->
-            if Registers.get reg1 model.registers /= Registers.get reg2 model.registers then
-                model
+            if Registers.get reg1 computer.registers /= Registers.get reg2 computer.registers then
+                computer
 
             else
-                incrementPC model
+                incrementPC computer
 
         SetRegConst reg (Byte byte) ->
-            { model | registers = Registers.set reg byte model.registers }
+            { computer | registers = Registers.set reg byte computer.registers }
 
         AddRegConst reg (Byte byte) ->
-            { model
+            { computer
                 | registers =
                     Registers.map
                         reg
                         (\regValue -> min 255 (regValue + byte))
-                        model.registers
+                        computer.registers
             }
 
         SetRegReg { from, to } ->
-            { model | registers = Registers.set to (Registers.get from model.registers) model.registers }
+            { computer | registers = Registers.set to (Registers.get from computer.registers) computer.registers }
 
         OrRegReg { from, to } ->
-            { model
+            { computer
                 | registers =
                     Registers.map to
-                        (\oldTo -> Bitwise.or oldTo (Registers.get from model.registers))
-                        model.registers
+                        (\oldTo -> Bitwise.or oldTo (Registers.get from computer.registers))
+                        computer.registers
             }
 
         AndRegReg { from, to } ->
-            { model
+            { computer
                 | registers =
                     Registers.map to
-                        (\oldTo -> Bitwise.and oldTo (Registers.get from model.registers))
-                        model.registers
+                        (\oldTo -> Bitwise.and oldTo (Registers.get from computer.registers))
+                        computer.registers
             }
 
         XorRegReg { from, to } ->
-            { model
+            { computer
                 | registers =
                     Registers.map to
-                        (\oldTo -> Bitwise.xor oldTo (Registers.get from model.registers))
-                        model.registers
+                        (\oldTo -> Bitwise.xor oldTo (Registers.get from computer.registers))
+                        computer.registers
             }
 
         AddRegReg { from, to } ->
             let
                 oldTo : Int
                 oldTo =
-                    Registers.get to model.registers
+                    Registers.get to computer.registers
 
                 from_ : Int
                 from_ =
-                    Registers.get from model.registers
+                    Registers.get from computer.registers
 
                 rawNewTo : Int
                 rawNewTo =
@@ -695,9 +857,9 @@ runInstruction instruction model =
                     else
                         ( rawNewTo, 0 )
             in
-            { model
+            { computer
                 | registers =
-                    model.registers
+                    computer.registers
                         |> Registers.set to newTo
                         |> Registers.set VF newVF
             }
@@ -706,11 +868,11 @@ runInstruction instruction model =
             let
                 oldTo : Int
                 oldTo =
-                    Registers.get to model.registers
+                    Registers.get to computer.registers
 
                 from_ : Int
                 from_ =
-                    Registers.get from model.registers
+                    Registers.get from computer.registers
 
                 rawNewTo : Int
                 rawNewTo =
@@ -723,9 +885,9 @@ runInstruction instruction model =
                     else
                         ( rawNewTo, 1 )
             in
-            { model
+            { computer
                 | registers =
-                    model.registers
+                    computer.registers
                         |> Registers.set to newTo
                         |> Registers.set VF newVF
             }
@@ -734,20 +896,21 @@ runInstruction instruction model =
             let
                 from_ : Int
                 from_ =
-                    Registers.get from model.registers
+                    Registers.get from computer.registers
 
                 newValue : Int
                 newValue =
                     from_
+                        -- TODO should this be zero-fill?
                         |> Bitwise.shiftRightZfBy 1
 
                 newVF : Int
                 newVF =
                     Bitwise.and 0x01 from_
             in
-            { model
+            { computer
                 | registers =
-                    model.registers
+                    computer.registers
                         |> Registers.set to newValue
                         |> Registers.set VF newVF
             }
@@ -756,11 +919,11 @@ runInstruction instruction model =
             let
                 oldTo : Int
                 oldTo =
-                    Registers.get to model.registers
+                    Registers.get to computer.registers
 
                 from_ : Int
                 from_ =
-                    Registers.get from model.registers
+                    Registers.get from computer.registers
 
                 rawNewTo : Int
                 rawNewTo =
@@ -773,9 +936,9 @@ runInstruction instruction model =
                     else
                         ( rawNewTo, 1 )
             in
-            { model
+            { computer
                 | registers =
-                    model.registers
+                    computer.registers
                         |> Registers.set to newTo
                         |> Registers.set VF newVF
             }
@@ -784,7 +947,7 @@ runInstruction instruction model =
             let
                 from_ : Int
                 from_ =
-                    Registers.get from model.registers
+                    Registers.get from computer.registers
 
                 newValue : Int
                 newValue =
@@ -800,61 +963,61 @@ runInstruction instruction model =
                     else
                         0
             in
-            { model
+            { computer
                 | registers =
-                    model.registers
+                    computer.registers
                         |> Registers.set to newValue
                         |> Registers.set VF newVF
             }
 
         DoIfEqReg reg1 reg2 ->
-            if Registers.get reg1 model.registers == Registers.get reg2 model.registers then
-                model
+            if Registers.get reg1 computer.registers == Registers.get reg2 computer.registers then
+                computer
 
             else
-                incrementPC model
+                incrementPC computer
 
         SetI addr ->
-            { model | i = addr }
+            { computer | i = addr }
 
         JumpPlusV0 (Address addr) ->
             {- TODO is this supposed to wrap around? ie. addr 0xFFF + (v0 = 0x05)
                -> should it crash out of bounds?
                -> or should it wrap around to something like 0x004
             -}
-            { model | pc = Address (addr + Registers.get V0 model.registers) }
+            { computer | pc = Address (addr + Registers.get V0 computer.registers) }
 
         SetRandomAnd register (Byte mask) ->
             let
                 ( randomByte, newSeed ) =
-                    Random.step byteGenerator model.randomSeed
+                    Random.step byteGenerator computer.randomSeed
 
                 maskedByte : Int
                 maskedByte =
                     Bitwise.and mask randomByte
             in
-            { model
+            { computer
                 | randomSeed = newSeed
-                , registers = Registers.set register maskedByte model.registers
+                , registers = Registers.set register maskedByte computer.registers
             }
 
         DrawSprite { vx, vy, height } ->
             let
                 x : Int
                 x =
-                    Registers.get vx model.registers
+                    Registers.get vx computer.registers
 
                 y : Int
                 y =
-                    Registers.get vy model.registers
+                    Registers.get vy computer.registers
 
                 (Address i) =
-                    model.i
+                    computer.i
 
                 spriteRows : Result Error (List Byte)
                 spriteRows =
                     List.range i (i + height - 1)
-                        |> Result.combineMap (\addr -> Memory.get (Address addr) model.memory)
+                        |> Result.combineMap (\addr -> Memory.get (Address addr) computer.memory)
 
                 xorBits : List Byte -> Result Error ( Memory, { hadCollision : Bool } )
                 xorBits rows =
@@ -883,11 +1046,11 @@ runInstruction instruction model =
                                                 |> Result.map (Tuple.mapSecond (\new -> { hadCollision = hadCollision || new.hadCollision }))
                                         )
                             )
-                            (Ok ( model.memory, { hadCollision = False } ))
+                            (Ok ( computer.memory, { hadCollision = False } ))
             in
             case spriteRows |> Result.andThen xorBits of
                 Err err ->
-                    { model | state = Halted err }
+                    { computer | state = Halted err }
 
                 Ok ( newMemory, { hadCollision } ) ->
                     let
@@ -899,54 +1062,54 @@ runInstruction instruction model =
                             else
                                 0
                     in
-                    { model
+                    { computer
                         | memory = newMemory
-                        , registers = Registers.set VF newVF model.registers
+                        , registers = Registers.set VF newVF computer.registers
                     }
 
         DoIfKeyNotPressed _ ->
-            todo model
+            todo instruction computer
 
         DoIfKeyPressed _ ->
-            todo model
+            todo instruction computer
 
         GetDelayTimer reg ->
-            { model | registers = Registers.set reg model.delayTimer model.registers }
+            { computer | registers = Registers.set reg computer.delayTimer computer.registers }
 
         SetPressedKey _ ->
-            todo model
+            todo instruction computer
 
         SetDelayTimer reg ->
-            { model | delayTimer = Registers.get reg model.registers }
+            { computer | delayTimer = Registers.get reg computer.registers }
 
         SetAudioTimer _ ->
-            todo model
+            todo instruction computer
 
         AddI reg ->
             let
                 (Address i) =
-                    model.i
+                    computer.i
             in
-            { model | i = Address ((i + Registers.get reg model.registers) |> modBy 0x1000) }
+            { computer | i = Address ((i + Registers.get reg computer.registers) |> modBy 0x1000) }
 
         SetIToFontAddr reg ->
             let
                 hexDigit : Int
                 hexDigit =
-                    Registers.get reg model.registers
+                    Registers.get reg computer.registers
                         |> modBy 0x10
 
                 address : Address
                 address =
                     Address (hexDigit * 5)
             in
-            { model | i = address }
+            { computer | i = address }
 
         BcdDecode reg ->
             let
                 value : Int
                 value =
-                    Registers.get reg model.registers
+                    Registers.get reg computer.registers
 
                 decimalDigits : List Int
                 decimalDigits =
@@ -957,7 +1120,7 @@ runInstruction instruction model =
                         |> Util.zeroPadLeft 3
 
                 (Address i) =
-                    model.i
+                    computer.i
 
                 addressesAndDigits : List ( Int, Int )
                 addressesAndDigits =
@@ -972,15 +1135,15 @@ runInstruction instruction model =
                             accMemory
                                 |> Result.andThen (\mem -> Memory.set (Address addr) digit mem)
                         )
-                        (Ok model.memory)
+                        (Ok computer.memory)
                         addressesAndDigits
             in
             case savedToMemory of
                 Err err ->
-                    { model | state = Halted err }
+                    { computer | state = Halted err }
 
                 Ok newMemory ->
-                    { model | memory = newMemory }
+                    { computer | memory = newMemory }
 
         SaveRegsUpTo reg ->
             let
@@ -989,11 +1152,11 @@ runInstruction instruction model =
                     Registers.upTo reg
 
                 (Address i) =
-                    model.i
+                    computer.i
 
                 bytesToSave : List Int
                 bytesToSave =
-                    List.map (\reg_ -> Registers.get reg_ model.registers) regs
+                    List.map (\reg_ -> Registers.get reg_ computer.registers) regs
 
                 savedToMemory : Result Error Memory
                 savedToMemory =
@@ -1004,14 +1167,14 @@ runInstruction instruction model =
                                 accMemory
                                     |> Result.andThen (\mem -> Memory.set (Address (i + di)) byte mem)
                             )
-                            (Ok model.memory)
+                            (Ok computer.memory)
             in
             case savedToMemory of
                 Err err ->
-                    { model | state = Halted err }
+                    { computer | state = Halted err }
 
                 Ok newMemory ->
-                    { model | memory = newMemory }
+                    { computer | memory = newMemory }
 
         LoadRegsUpTo reg ->
             let
@@ -1020,23 +1183,23 @@ runInstruction instruction model =
                     Registers.index reg
 
                 (Address i) =
-                    model.i
+                    computer.i
 
                 loadedBytes : Result Error (List Byte)
                 loadedBytes =
                     List.range i (i + n)
-                        |> Result.combineMap (\addr -> Memory.get (Address addr) model.memory)
+                        |> Result.combineMap (\addr -> Memory.get (Address addr) computer.memory)
             in
             case loadedBytes of
                 Err err ->
-                    { model | state = Halted err }
+                    { computer | state = Halted err }
 
                 Ok bytes ->
-                    { model
+                    { computer
                         | registers =
                             List.foldl
                                 (\( reg_, Byte byte ) accRegisters -> Registers.set reg_ byte accRegisters)
-                                model.registers
+                                computer.registers
                                 (List.map2 Tuple.pair (Registers.upTo reg) bytes)
                     }
 

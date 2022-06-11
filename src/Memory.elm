@@ -143,47 +143,51 @@ xorDisplayBit ( x, y ) xorBit memory =
         addr =
             Address (displayStart + bytePosition)
     in
-    get addr memory
-        |> Result.andThen
-            (\(Byte byte) ->
-                let
-                    bitIndexInsideByte : Int
-                    bitIndexInsideByte =
-                        bitPosition |> modBy 8
+    case get addr memory of
+        Err (MemoryOverflow _) ->
+            Ok ( memory, { hadCollision = False } )
 
-                    currentBit : Int
-                    currentBit =
-                        bit bitIndexInsideByte byte
+        Err err ->
+            Err err
 
-                    resultBit : Int
-                    resultBit =
-                        Bitwise.xor currentBit xorBit
+        Ok (Byte byte) ->
+            let
+                bitIndexInsideByte : Int
+                bitIndexInsideByte =
+                    bitPosition |> modBy 8
 
-                    mask : Int
-                    mask =
-                        Bitwise.shiftLeftBy (7 - bitIndexInsideByte) 1
+                currentBit : Int
+                currentBit =
+                    bit bitIndexInsideByte byte
 
-                    resultByte : Int
-                    resultByte =
-                        -- https://graphics.stanford.edu/~seander/bithacks.html#MaskedMerge
-                        -- Merge bits from two values according to a mask
-                        -- Normal: (a & ~mask) | (b & mask)
-                        -- Optimized: a ^ ((a ^ b) & mask)
-                        Bitwise.or
-                            (Bitwise.and byte (Bitwise.complement mask))
-                            (Bitwise.shiftLeftBy (7 - bitIndexInsideByte) resultBit)
-                in
-                setUnsafe addr resultByte memory
-                    |> Result.map
-                        (\newMemory ->
-                            let
-                                hadCollision : Bool
-                                hadCollision =
-                                    currentBit == 1 && resultBit == 0
-                            in
-                            ( newMemory, { hadCollision = hadCollision } )
-                        )
-            )
+                resultBit : Int
+                resultBit =
+                    Bitwise.xor currentBit xorBit
+
+                mask : Int
+                mask =
+                    Bitwise.shiftLeftBy (7 - bitIndexInsideByte) 1
+
+                resultByte : Int
+                resultByte =
+                    -- https://graphics.stanford.edu/~seander/bithacks.html#MaskedMerge
+                    -- Merge bits from two values according to a mask
+                    -- Normal: (a & ~mask) | (b & mask)
+                    -- Optimized: a ^ ((a ^ b) & mask)
+                    Bitwise.or
+                        (Bitwise.and byte (Bitwise.complement mask))
+                        (Bitwise.shiftLeftBy (7 - bitIndexInsideByte) resultBit)
+            in
+            setUnsafe addr resultByte memory
+                |> Result.map
+                    (\newMemory ->
+                        let
+                            hadCollision : Bool
+                            hadCollision =
+                                currentBit == 1 && resultBit == 0
+                        in
+                        ( newMemory, { hadCollision = hadCollision } )
+                    )
 
 
 bit : Int -> Int -> Int

@@ -2,11 +2,11 @@ module Instruction exposing
     ( Address(..)
     , Byte(..)
     , Instruction(..)
-    , arguments
+    , code
     , toString
     )
 
-import Registers exposing (Register)
+import Registers exposing (Register(..))
 import Util
 
 
@@ -57,6 +57,125 @@ type Instruction
     | BcdDecode Register
     | SaveRegsUpTo Register
     | LoadRegsUpTo Register
+
+
+code : Instruction -> String
+code instruction =
+    let
+        fn : String -> List String -> String
+        fn name args =
+            name ++ "(" ++ String.join ", " args ++ ")"
+
+        setReg : Register -> String -> String
+        setReg reg value =
+            Registers.name reg ++ " = " ++ value
+    in
+    case instruction of
+        Clear ->
+            fn "clear_screen" []
+
+        Return ->
+            "return"
+
+        Jump (Address addr) ->
+            fn "jmp" [ Util.hex addr ]
+
+        Call (Address addr) ->
+            fn "call" [ Util.hex addr ]
+
+        DoIfNeq reg (Byte byte) ->
+            "if (" ++ Registers.name reg ++ " != " ++ Util.hex byte ++ ")"
+
+        DoIfEq reg (Byte byte) ->
+            "if (" ++ Registers.name reg ++ " == " ++ Util.hex byte ++ ")"
+
+        DoIfNeqReg r1 r2 ->
+            "if (" ++ Registers.name r1 ++ " != " ++ Registers.name r2 ++ ")"
+
+        SetRegConst reg (Byte byte) ->
+            setReg reg (Util.hex byte)
+
+        AddRegConst reg (Byte byte) ->
+            setReg reg (Registers.name reg ++ " + " ++ Util.hex byte)
+
+        SetRegReg { from, to } ->
+            setReg to (Registers.name from)
+
+        OrRegReg { from, to } ->
+            setReg to (Registers.name to ++ " | " ++ Registers.name from)
+
+        AndRegReg { from, to } ->
+            setReg to (Registers.name to ++ " & " ++ Registers.name from)
+
+        XorRegReg { from, to } ->
+            setReg to (Registers.name to ++ " ^ " ++ Registers.name from)
+
+        AddRegReg { from, to } ->
+            setReg to (Registers.name to ++ " + " ++ Registers.name from)
+
+        SubRegReg { from, to } ->
+            setReg to (Registers.name to ++ " - " ++ Registers.name from)
+
+        ShiftRightBy1 { from, to } ->
+            setReg to (Registers.name from ++ " >>> 1")
+
+        SubReverseRegReg { from, to } ->
+            setReg to (Registers.name from ++ " - " ++ Registers.name to)
+
+        ShiftLeftBy1 { from, to } ->
+            setReg to (Registers.name from ++ " << 1")
+
+        DoIfEqReg r1 r2 ->
+            "if (" ++ Registers.name r1 ++ " == " ++ Registers.name r2 ++ ")"
+
+        SetI (Address addr) ->
+            "i = " ++ Util.hex addr
+
+        JumpPlusV0 (Address addr) ->
+            fn "jmp" [ Util.hex addr ++ " + " ++ Registers.name V0 ]
+
+        SetRandomAnd reg (Byte byte) ->
+            setReg reg ("rand() && " ++ Util.hex byte)
+
+        DrawSprite { vx, vy, height } ->
+            fn "draw"
+                [ "x=" ++ Registers.name vx
+                , "y=" ++ Registers.name vy
+                , "h=" ++ String.fromInt height
+                ]
+
+        DoIfKeyNotPressed _ ->
+            "TODO"
+
+        DoIfKeyPressed _ ->
+            "TODO"
+
+        GetDelayTimer _ ->
+            "TODO"
+
+        SetPressedKey _ ->
+            "TODO"
+
+        SetDelayTimer reg ->
+            "delay_t = " ++ Registers.name reg
+
+        SetAudioTimer reg ->
+            "audio_t = " ++ Registers.name reg
+
+        AddI reg ->
+            "i = i + " ++ Registers.name reg
+
+        SetIToFontAddr reg ->
+            "i = font_address(" ++ Registers.name reg ++ ")"
+
+        BcdDecode reg ->
+            fn "bcd_decode" [ Registers.name reg ]
+
+        SaveRegsUpTo reg ->
+            fn "save_regs" [ Registers.name V0 ++ ".." ++ Registers.name reg ]
+
+        LoadRegsUpTo reg ->
+            fn "load_regs" [ Registers.name V0 ++ ".." ++ Registers.name reg ]
 
 
 toString : Instruction -> String
@@ -163,118 +282,3 @@ toString instruction =
 
         LoadRegsUpTo _ ->
             "LoadRegsUpTo"
-
-
-arguments : Instruction -> String
-arguments instruction =
-    let
-        twoRegs : Register -> Register -> String
-        twoRegs r1 r2 =
-            Registers.name r1 ++ ", " ++ Registers.name r2
-
-        fromTo : Register -> Register -> String
-        fromTo from to =
-            Registers.name from ++ " -> " ++ Registers.name to
-    in
-    case instruction of
-        Clear ->
-            ""
-
-        Return ->
-            ""
-
-        Jump (Address addr) ->
-            Util.hex addr
-
-        Call (Address addr) ->
-            Util.hex addr
-
-        DoIfNeq reg (Byte byte) ->
-            Registers.name reg ++ ", " ++ Util.hex byte
-
-        DoIfEq reg (Byte byte) ->
-            Registers.name reg ++ ", " ++ Util.hex byte
-
-        DoIfNeqReg reg1 reg2 ->
-            twoRegs reg1 reg2
-
-        SetRegConst reg (Byte byte) ->
-            Registers.name reg ++ ", " ++ Util.hex byte
-
-        AddRegConst reg (Byte byte) ->
-            Registers.name reg ++ ", " ++ Util.hex byte
-
-        SetRegReg { from, to } ->
-            fromTo from to
-
-        OrRegReg { from, to } ->
-            fromTo from to
-
-        AndRegReg { from, to } ->
-            fromTo from to
-
-        XorRegReg { from, to } ->
-            fromTo from to
-
-        AddRegReg { from, to } ->
-            fromTo from to
-
-        SubRegReg { from, to } ->
-            fromTo from to
-
-        ShiftRightBy1 { from, to } ->
-            fromTo from to
-
-        SubReverseRegReg { from, to } ->
-            fromTo from to
-
-        ShiftLeftBy1 { from, to } ->
-            fromTo from to
-
-        DoIfEqReg reg1 reg2 ->
-            twoRegs reg1 reg2
-
-        SetI (Address addr) ->
-            Util.hex addr
-
-        JumpPlusV0 (Address addr) ->
-            Util.hex addr
-
-        SetRandomAnd reg (Byte byte) ->
-            Registers.name reg ++ ", " ++ Util.hex byte
-
-        DrawSprite { vx, vy, height } ->
-            Registers.name vx ++ ", " ++ Registers.name vy ++ ", " ++ String.fromInt height
-
-        DoIfKeyNotPressed reg ->
-            Registers.name reg
-
-        DoIfKeyPressed reg ->
-            Registers.name reg
-
-        GetDelayTimer reg ->
-            Registers.name reg
-
-        SetPressedKey reg ->
-            Registers.name reg
-
-        SetDelayTimer reg ->
-            Registers.name reg
-
-        SetAudioTimer reg ->
-            Registers.name reg
-
-        AddI reg ->
-            Registers.name reg
-
-        SetIToFontAddr reg ->
-            Registers.name reg
-
-        BcdDecode reg ->
-            Registers.name reg
-
-        SaveRegsUpTo reg ->
-            Registers.name reg
-
-        LoadRegsUpTo reg ->
-            Registers.name reg
