@@ -25,6 +25,7 @@ type Byte
 type Instruction
     = Clear
     | Return
+    | MagicFn Address
     | Jump Address
     | Call Address
     | DoIfNeq Register Byte
@@ -177,6 +178,9 @@ code instruction =
         LoadRegsUpTo reg ->
             fn "load_regs" [ Registers.name V0 ++ ".." ++ Registers.name reg ]
 
+        MagicFn (Address addr) ->
+            fn "magic_fn" [ Util.hex addr ]
+
 
 toString : Instruction -> String
 toString instruction =
@@ -282,3 +286,6 @@ toString instruction =
 
         LoadRegsUpTo _ ->
             "LoadRegsUpTo"
+
+        MagicFn _ ->
+            "MagicFn"

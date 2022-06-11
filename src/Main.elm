@@ -725,7 +725,7 @@ step pressedKeys computer =
 
 incrementPCIfNeeded : Instruction -> Computer -> Computer
 incrementPCIfNeeded instruction computer =
-    if isRunning computer.state && shouldIncrementPC instruction then
+    if shouldIncrementPC instruction then
         incrementPC computer
 
     else
@@ -846,6 +846,9 @@ shouldIncrementPC instruction =
         LoadRegsUpTo _ ->
             True
 
+        MagicFn _ ->
+            True
+
 
 todo : Instruction -> Computer -> Computer
 todo instruction c =
@@ -911,7 +914,7 @@ runInstruction pressedKeys instruction computer =
                 | registers =
                     Registers.map
                         reg
-                        (\regValue -> min 255 (regValue + byte))
+                        (\regValue -> (regValue + byte) |> modBy 0x0100)
                         computer.registers
             }
 
@@ -1316,6 +1319,9 @@ runInstruction pressedKeys instruction computer =
                                 computer.registers
                                 (List.map2 Tuple.pair (Registers.upTo reg) bytes)
                     }
+
+        MagicFn _ ->
+            todo instruction computer
 
 
 byteGenerator : Generator Int

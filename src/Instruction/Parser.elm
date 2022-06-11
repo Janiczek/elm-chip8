@@ -81,6 +81,9 @@ parse (( Byte hi, (Byte lo) as lo_ ) as pair) =
     else if hi == 0x00 && lo == 0xEE then
         Ok Return
 
+    else if hi == 0x00 then
+        Ok (MagicFn (address pair))
+
     else if hh == 0x01 then
         Ok (Jump (address pair))
 
